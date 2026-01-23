@@ -88,6 +88,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -97,6 +98,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import androidx.core.content.edit
@@ -136,12 +138,16 @@ object PlaybackController {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var appContext: Context? = null
 
+    private const val PREFS = "bitsbeats_prefs"
+    private const val KEY_LAST_STATE = "last_playback_state"
+
     /** Play a list of URIs as a queue starting at [startIndex]. This replaces any existing queue. */
     fun playQueue(context: Context, uris: List<String>, startIndex: Int = 0) {
         if (uris.isEmpty()) return
         queue = uris
         queueIndex = startIndex.coerceIn(0, uris.size - 1)
         appContext = context.applicationContext
+        saveState(context) // persist queue immediately
         playCurrentFromQueue()
     }
 
@@ -155,9 +161,9 @@ object PlaybackController {
         }
         val uriStr = queue[idx]
         try {
-            val uri = android.net.Uri.parse(uriStr)
+            val uri = uriStr.toUri()
             playUri(ctx, uri)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // skip to next on error
             nextTrack()
         }
@@ -204,18 +210,8 @@ object PlaybackController {
                 startTicker()
             }
 
-            // persist last playback (position 0)
-            try {
-                val prefs = context.getSharedPreferences("bitsbeats_prefs", Context.MODE_PRIVATE)
-                val json = JSONObject().apply {
-                    put("uri", currentUri ?: "")
-                    put("position", 0L)
-                    put("isPlaying", true)
-                    put("updatedAt", System.currentTimeMillis())
-                }
-                prefs.edit { putString("last_playback", json.toString()) }
-            } catch (_: Exception) {}
-        } catch (e: Exception) {
+            saveState(context)
+        } catch (_: Exception) {
             isPlaying = false
         }
     }
@@ -231,10 +227,13 @@ object PlaybackController {
             isPlaying = true
             startTicker()
         }
+        // persist play state
+        appContext?.let { saveState(it) }
     }
 
     fun seekTo(ms: Int) {
         try { mediaPlayer?.seekTo(ms); currentPosition = ms.toLong() } catch (_: Exception) {}
+        appContext?.let { saveState(it) }
     }
 
     private fun startTicker() {
@@ -242,7 +241,9 @@ object PlaybackController {
         tickerJob = scope.launch {
             while (true) {
                 currentPosition = mediaPlayer?.currentPosition?.toLong() ?: 0L
-                kotlinx.coroutines.delay(500)
+                // persist occasionally (every 1s)
+                saveState(appContext)
+                kotlinx.coroutines.delay(1000)
             }
         }
     }
@@ -258,6 +259,7 @@ object PlaybackController {
         }
         if (queueIndex + 1 < queue.size) {
             queueIndex += 1
+            appContext?.let { saveState(it) }
             playCurrentFromQueue()
         } else {
             // end of queue: stop
@@ -269,6 +271,7 @@ object PlaybackController {
         if (queue.isEmpty()) { stopPlayback(); return }
         if (queueIndex - 1 >= 0) {
             queueIndex -= 1
+            appContext?.let { saveState(it) }
             playCurrentFromQueue()
         } else {
             // restart current track from beginning
@@ -286,28 +289,67 @@ object PlaybackController {
         duration = 0L
         queue = emptyList()
         queueIndex = -1
+        // clear persisted state
+        appContext?.let { ctx ->
+            try { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { remove(KEY_LAST_STATE) } } catch (_: Exception) {}
+        }
     }
 
-    fun restoreLast(context: Context) {
+    // Persist playback state (queue, index, position, isPlaying)
+    private fun saveState(context: Context?) {
+        if (context == null) return
         try {
-            val prefs = context.getSharedPreferences("bitsbeats_prefs", Context.MODE_PRIVATE)
-            val s = prefs.getString("last_playback", null) ?: return
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val json = JSONObject().apply {
+                put("queue", org.json.JSONArray(queue))
+                put("queueIndex", queueIndex)
+                put("position", currentPosition)
+                put("isPlaying", isPlaying)
+                put("updatedAt", System.currentTimeMillis())
+            }
+            prefs.edit { putString(KEY_LAST_STATE, json.toString()) }
+        } catch (_: Exception) {}
+    }
+
+    // Restore persisted playback state; if queue present, prepare media to that position but do not auto-play unless wasPlaying
+    fun restoreState(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val s = prefs.getString(KEY_LAST_STATE, null) ?: return
             val json = JSONObject(s)
-            val uriStr = json.optString("uri").takeIf { it.isNotBlank() } ?: return
+            val arr = json.optJSONArray("queue") ?: return
+            val uris = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                val v = arr.optString(i)
+                if (v.isNotBlank()) uris.add(v)
+            }
+            if (uris.isEmpty()) return
+            val idx = json.optInt("queueIndex", 0).coerceIn(0, uris.size - 1)
             val pos = json.optLong("position", 0L)
-            val wasPlaying = json.optBoolean("isPlaying", false)
-            currentUri = uriStr
+            // val wasPlaying = json.optBoolean("isPlaying", false)
+
+            // set state
+            queue = uris
+            queueIndex = idx
+            appContext = context.applicationContext
+
+            // prepare media and position, but DO NOT auto-start playback on app open
             try {
-                val u = android.net.Uri.parse(uriStr)
+                val uri = queue[queueIndex].toUri()
                 mediaPlayer?.release()
                 mediaPlayer = MediaPlayer()
-                context.contentResolver.openFileDescriptor(u, "r")?.use { pfd -> mediaPlayer?.setDataSource(pfd.fileDescriptor) }
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd -> mediaPlayer?.setDataSource(pfd.fileDescriptor) }
                 mediaPlayer?.prepare()
                 duration = mediaPlayer?.duration?.toLong() ?: 0L
                 if (pos > 0) mediaPlayer?.seekTo(pos.toInt())
                 currentPosition = pos
-                if (wasPlaying) { mediaPlayer?.start(); isPlaying = true; startTicker() } else isPlaying = false
-            } catch (_: Exception) {}
+                currentUri = queue[queueIndex]
+                // keep paused on restore (user must press play)
+                isPlaying = false
+            } catch (_: Exception) {
+                // if prepare fails, clear
+                stopPlayback()
+            }
         } catch (_: Exception) {}
     }
 
@@ -327,6 +369,10 @@ class MainActivity : ComponentActivity() {
             BitsBeatsTheme {
                 val navController = rememberNavController()
                 val appContext = LocalContext.current
+                // restore persisted playback state once when the UI is composed
+                LaunchedEffect(Unit) {
+                    try { PlaybackController.restoreState(appContext) } catch (_: Exception) {}
+                }
                 Box(modifier = Modifier.fillMaxSize()) {
                     NavHost(
                         navController = navController,
@@ -380,15 +426,13 @@ class MainActivity : ComponentActivity() {
                                     val enc = URLEncoder.encode(name, "UTF-8")
                                     navController.navigate("playlistDetail/$enc")
                                 },
-                                onCreatePlaylist = { name ->
-                                    // handled inside PlaylistScreen using PlaylistStore
-                                }
+                                onCreatePlaylist = {}
                             )
                         }
 
                         composable("playlistDetail/{name}") { backStackEntry ->
                             val encoded = backStackEntry.arguments?.getString("name") ?: ""
-                            val name = try { URLDecoder.decode(encoded, "UTF-8") } catch (e: Exception) { encoded }
+                            val name = try { URLDecoder.decode(encoded, "UTF-8") } catch (_: Exception) { encoded }
                             PlaylistDetailScreen(
                                 playlistName = name,
                                 onBack = { navController.popBackStack() },
@@ -405,7 +449,7 @@ class MainActivity : ComponentActivity() {
 
                         composable("filebrowser/{addTo}") { backStackEntry ->
                             val encoded = backStackEntry.arguments?.getString("addTo") ?: ""
-                            val playlistName = try { URLDecoder.decode(encoded, "UTF-8") } catch (e: Exception) { encoded }
+                            val playlistName = try { URLDecoder.decode(encoded, "UTF-8") } catch (_: Exception) { encoded }
                             FileBrowserScreen(onFileSelected = { audioId -> PlaybackController.playAudioId(appContext, audioId) }, onNavigateBack = { navController.popBackStack() }, addToPlaylistName = playlistName)
                         }
                     }
@@ -514,7 +558,7 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
             // navigation from mini-player or 'open last': if we already have a currentUri active
             // don't re-initialize playback when opening the player. Only attempt restore if nothing loaded.
             if (restoreIfNoCurrent && PlaybackController.currentUri == null) {
-                PlaybackController.restoreLast(context)
+                PlaybackController.restoreState(context)
             }
         }
     }
@@ -876,7 +920,7 @@ fun FileBrowserScreen(
         if (hasPermission) {
             files = getDirectoryContents(currentPath)
             // populate cache for audio files
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 val newMap = mutableMapOf<String, Long?>()
                 files.filter { it.isAudio }.forEach { f ->
                     try {
@@ -1095,7 +1139,7 @@ object PlaylistStore {
                 result[name] = list
             }
             result
-        } catch (e: Exception) { emptyMap() }
+        } catch (_: Exception) { emptyMap() }
     }
 
     private fun saveAll(context: Context, data: Map<String, List<Map<String, Any>>>) {
