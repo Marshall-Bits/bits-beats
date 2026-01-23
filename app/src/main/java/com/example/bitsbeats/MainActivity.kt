@@ -49,10 +49,15 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -640,6 +645,10 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
     var playlists by remember { mutableStateOf<List<String>>(emptyList()) }
     // Name of playlist pending deletion (to show confirm dialog)
     var playlistToDelete by remember { mutableStateOf<String?>(null) }
+    // menu state for per-row options
+    var menuFor by remember { mutableStateOf<String?>(null) }
+    var editingName by remember { mutableStateOf<String?>(null) }
+    var editText by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         playlists = PlaylistStore.loadAll(context).keys.toList()
@@ -665,10 +674,20 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                     items(playlists) { name ->
-                        Row(modifier = Modifier.fillMaxWidth().clickable { onNavigateToPlaylistDetail(name) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = name, color = Color.White, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { playlistToDelete = name }) {
-                                Icon(imageVector = Icons.Filled.Folder, contentDescription = "Eliminar playlist", tint = Color.LightGray)
+                        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            // Tappable title -> go to details
+                            Row(modifier = Modifier.weight(1f).clickable { onNavigateToPlaylistDetail(name) }, verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = name, color = Color.White)
+                            }
+
+                            // three-dot menu
+                            IconButton(onClick = { menuFor = if (menuFor == name) null else name }) {
+                                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones", tint = Color.LightGray)
+                            }
+
+                            DropdownMenu(expanded = (menuFor == name), onDismissRequest = { menuFor = null }) {
+                                DropdownMenuItem(text = { Text("Delete playlist") }, leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) }, onClick = { playlistToDelete = name; menuFor = null })
+                                DropdownMenuItem(text = { Text("Edit name") }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }, onClick = { editingName = name; editText = name; menuFor = null })
                             }
                         }
                     }
@@ -697,6 +716,7 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
             )
         }
 
+        // Create playlist dialog (restored)
         if (showingDialog) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showingDialog = false },
@@ -720,6 +740,36 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                 },
                 dismissButton = {
                     Button(onClick = { showingDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
+        // Edit name dialog
+        if (editingName != null) {
+            val original = editingName!!
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { editingName = null },
+                title = { Text("Editar nombre") },
+                text = {
+                    androidx.compose.material3.TextField(value = editText, onValueChange = { editText = it }, placeholder = { Text("Nuevo nombre") })
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val newN = editText.trim()
+                        if (newN.isNotBlank()) {
+                            val ok = PlaylistStore.renamePlaylist(context, original, newN)
+                            if (ok) {
+                                playlists = PlaylistStore.loadAll(context).keys.toList()
+                                editingName = null
+                                Toast.makeText(context, "Renombrada a '$newN'", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "No se pudo renombrar (ya existe o error)", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }) { Text("Guardar") }
+                },
+                dismissButton = {
+                    Button(onClick = { editingName = null }) { Text("Cancelar") }
                 }
             )
         }
@@ -1103,6 +1153,16 @@ object PlaylistStore {
         val all = loadAll(context).toMutableMap()
         all.remove(name)
         saveAll(context, all)
+    }
+
+    fun renamePlaylist(context: Context, oldName: String, newName: String): Boolean {
+        val all = loadAll(context).toMutableMap()
+        if (!all.containsKey(oldName)) return false
+        if (all.containsKey(newName)) return false
+        val value = all.remove(oldName) ?: emptyList()
+        all[newName] = value
+        saveAll(context, all)
+        return true
     }
 
     fun addItemToPlaylist(context: Context, playlistName: String, uri: String, title: String, artist: String, duration: Long) {
