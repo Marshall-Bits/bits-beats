@@ -88,7 +88,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.ModalBottomSheet
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -344,15 +346,15 @@ class MainActivity : ComponentActivity() {
                     val currentRoute = navBackStack?.destination?.route ?: ""
                     val showMini = !currentRoute.startsWith("player") && PlaybackController.currentUri != null
                     // Bottom navigation menu height
-                    val bottomNavHeight = 64.dp
+                    val bottomNavHeight = 140.dp
 
                     AnimatedVisibility(
                         visible = showMini,
                         // align AnimatedVisibility at bottom, respect system nav insets and pad upwards so mini-player sits neatly above the bottom nav menu
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 8.dp).padding(bottom = bottomNavHeight + 32.dp).zIndex(0f),
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 8.dp).padding(bottom = bottomNavHeight).zIndex(0f),
                         // start from further below so it appears to come from outside the screen edge
-                        enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight * 2 }, animationSpec = tween(300)),
-                        exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight * 2 }, animationSpec = tween(300))
+                        enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight * 3 }, animationSpec = tween(300)),
+                        exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight * 3 }, animationSpec = tween(300))
                     ) {
                         // child should fill the width provided by the AnimatedVisibility container and have a controlled height
                         PlaybackMiniPlayer(navController = navController, modifier = Modifier.fillMaxWidth().height(64.dp))
@@ -362,15 +364,13 @@ class MainActivity : ComponentActivity() {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .navigationBarsPadding()
-                            .padding(horizontal = 8.dp)
                             .fillMaxWidth()
                             .height(bottomNavHeight)
-                            .background(Color.Black.copy(alpha = 0.65f), shape = RoundedCornerShape(12.dp))
+                            .background(Color.Black.copy(alpha = 0.85f))
                             .zIndex(1f),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.TopCenter
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                             // Home
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { navController.navigate("home") }) {
                                 Icon(imageVector = Icons.Filled.Home, contentDescription = "Inicio", tint = Color.White, modifier = Modifier.size(24.dp))
@@ -424,7 +424,7 @@ fun PlaybackMiniPlayer(navController: androidx.navigation.NavHostController, mod
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-            Text(text = if (artist.isNotBlank()) artist else "Artista desconocido", color = Color.LightGray, maxLines = 1)
+            Text(text = artist.ifBlank { "Artista desconocido" }, color = Color.LightGray, maxLines = 1)
         }
         IconButton(onClick = { PlaybackController.togglePlayPause() }) {
             Icon(imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", tint = Color.White)
@@ -865,7 +865,10 @@ fun FileBrowserScreen(
 
         if (!showFileBrowser) {
             // Recent audio list: tap the row to play, '+' to add to playlist when applicable
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item{
+                    Spacer(modifier = Modifier.height(12.dp) )
+                }
                 items(audioFiles) { audio ->
                     Row(
                         modifier = Modifier
@@ -891,10 +894,16 @@ fun FileBrowserScreen(
                         }
                     }
                 }
+                item{
+                    Spacer(modifier = Modifier.height(200.dp) )
+                }
             }
         } else {
             // File browser: tap directories to enter, tap audio rows to play, '+' to add to playlist
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item{
+                    Spacer(modifier = Modifier.height(12.dp) )
+                }
                 items(files) { fileItem ->
                     val resolvedId = if (fileItem.isAudio) pathToId[fileItem.path] else null
 
@@ -939,6 +948,9 @@ fun FileBrowserScreen(
                             }) { Icon(imageVector = Icons.Filled.Add, contentDescription = "Añadir", tint = Color.White) }
                         }
                     }
+                }
+                item{
+                    Spacer(modifier = Modifier.height(200.dp) )
                 }
             }
         }
