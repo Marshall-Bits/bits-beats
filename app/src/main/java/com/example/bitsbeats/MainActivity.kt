@@ -179,7 +179,7 @@ fun HomeScreen(onNavigateToPlayer: () -> Unit, onNavigateToPlaylist: () -> Unit,
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Hola!",
+                text = "Bits Beats",
                 fontSize = 48.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
