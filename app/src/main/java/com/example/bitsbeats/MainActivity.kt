@@ -84,6 +84,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -680,14 +681,16 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                                 Text(text = name, color = Color.White)
                             }
 
-                            // three-dot menu
-                            IconButton(onClick = { menuFor = if (menuFor == name) null else name }) {
-                                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones", tint = Color.LightGray)
-                            }
+                            // three-dot menu anchored to the button (menu will appear to the right/below)
+                            Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
+                                IconButton(onClick = { menuFor = if (menuFor == name) null else name }) {
+                                    Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones", tint = Color.LightGray)
+                                }
 
-                            DropdownMenu(expanded = (menuFor == name), onDismissRequest = { menuFor = null }) {
-                                DropdownMenuItem(text = { Text("Edit name") }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }, onClick = { editingName = name; editText = name; menuFor = null })
-                                DropdownMenuItem(text = { Text("Delete playlist") }, leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) }, onClick = { playlistToDelete = name; menuFor = null })
+                                DropdownMenu(expanded = (menuFor == name), onDismissRequest = { menuFor = null }) {
+                                    DropdownMenuItem(text = { Text("Edit name") }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }, onClick = { editingName = name; editText = name; menuFor = null })
+                                    DropdownMenuItem(text = { Text("Delete playlist") }, leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) }, onClick = { playlistToDelete = name; menuFor = null })
+                                }
                             }
                         }
                     }
