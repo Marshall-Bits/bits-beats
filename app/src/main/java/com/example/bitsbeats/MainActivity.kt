@@ -242,29 +242,31 @@ fun HomeScreen(onNavigateToPlayer: () -> Unit, onNavigateToPlaylist: () -> Unit,
 fun PlayerScreen(audioId: Long = -1L) {
     val context = LocalContext.current
     // For saving/restoring last playback state (uri + position)
-    fun saveLastPlayback(context: Context, uriString: String?, positionMs: Long) {
+    fun saveLastPlayback(context: Context, uriString: String?, positionMs: Long, isPlaying: Boolean) {
         if (uriString == null) return
         try {
             val prefs = context.getSharedPreferences("bitsbeats_prefs", Context.MODE_PRIVATE)
             val json = JSONObject().apply {
                 put("uri", uriString)
                 put("position", positionMs)
+                put("isPlaying", isPlaying)
                 put("updatedAt", System.currentTimeMillis())
             }
             prefs.edit { putString("last_playback", json.toString()) }
         } catch (_: Exception) { }
     }
 
-    fun loadLastPlayback(context: Context): Pair<String?, Long> {
+    fun loadLastPlayback(context: Context): Triple<String?, Long, Boolean> {
         return try {
             val prefs = context.getSharedPreferences("bitsbeats_prefs", Context.MODE_PRIVATE)
-            val s = prefs.getString("last_playback", null) ?: return Pair(null, 0L)
+            val s = prefs.getString("last_playback", null) ?: return Triple(null, 0L, false)
             val json = JSONObject(s)
             val uri = json.optString("uri").takeIf { it.isNotBlank() }
             val pos = json.optLong("position", 0L)
-            Pair(uri, pos)
-        } catch (e: Exception) {
-            Pair(null, 0L)
+            val wasPlaying = json.optBoolean("isPlaying", false)
+            Triple(uri, pos, wasPlaying)
+        } catch (_: Exception) {
+            Triple(null, 0L, false)
         }
     }
 
@@ -307,7 +309,8 @@ fun PlayerScreen(audioId: Long = -1L) {
                 duration = mediaPlayer.duration.toLong()
                 // set current uri string for persistence
                 currentUriString = uri.toString()
-                saveLastPlayback(context, currentUriString, 0L)
+                // we just started playback for a newly selected audio -> save as playing
+                saveLastPlayback(context, currentUriString, 0L, true)
                 mediaPlayer.start()
                 isPlaying = true
             } catch (e: Exception) {
@@ -316,7 +319,7 @@ fun PlayerScreen(audioId: Long = -1L) {
             }
         } else {
             // audioId == -1L -> intentar restaurar última reproducción desde prefs (URI + position)
-            val (savedUriString, savedPos) = loadLastPlayback(context)
+            val (savedUriString, savedPos, savedWasPlaying) = loadLastPlayback(context)
             if (!savedUriString.isNullOrEmpty()) {
                 try {
                     val uri = savedUriString.toUri()
@@ -349,8 +352,14 @@ fun PlayerScreen(audioId: Long = -1L) {
                     // clamp position
                     val pos = savedPos.coerceIn(0L, duration)
                     if (pos > 0) mediaPlayer.seekTo(pos.toInt())
-                    mediaPlayer.start()
-                    isPlaying = true
+                    // restore playing state: if it was playing previously, start; otherwise stay paused
+                    if (savedWasPlaying) {
+                        mediaPlayer.start()
+                        isPlaying = true
+                    } else {
+                        // keep media player prepared but paused
+                        isPlaying = false
+                    }
                     currentPosition = pos
                 } catch (_: Exception) {
                     // ignore restore failure
@@ -369,7 +378,7 @@ fun PlayerScreen(audioId: Long = -1L) {
             }
             // persist current position every second if we have a uri
             if (!currentUriString.isNullOrEmpty()) {
-                saveLastPlayback(context, currentUriString, currentPosition)
+                saveLastPlayback(context, currentUriString, currentPosition, isPlaying)
             }
             delay(1000)
         }
@@ -502,11 +511,13 @@ fun PlayerScreen(audioId: Long = -1L) {
                         if (isPlaying) {
                             mediaPlayer.pause()
                             isPlaying = false
-                            // save position on pause
-                            saveLastPlayback(context, currentUriString, currentPosition)
+                            // save position and paused state
+                            saveLastPlayback(context, currentUriString, currentPosition, false)
                         } else {
                             mediaPlayer.start()
                             isPlaying = true
+                            // save that we are now playing
+                            saveLastPlayback(context, currentUriString, currentPosition, true)
                         }
                     },
                     modifier = Modifier.size(80.dp)
@@ -524,7 +535,7 @@ fun PlayerScreen(audioId: Long = -1L) {
                         val newPosition = (currentPosition + 10000).coerceAtMost(duration)
                         mediaPlayer.seekTo(newPosition.toInt())
                         currentPosition = newPosition
-                        saveLastPlayback(context, currentUriString, currentPosition)
+                        saveLastPlayback(context, currentUriString, currentPosition, isPlaying)
                     },
                     modifier = Modifier.size(64.dp)
                 ) {
