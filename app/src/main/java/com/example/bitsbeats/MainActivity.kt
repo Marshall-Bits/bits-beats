@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.os.Build
@@ -80,7 +81,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.bitsbeats.ui.theme.BitsBeatsTheme
 import kotlinx.coroutines.delay
+import org.json.JSONObject
 import java.io.File
+import androidx.core.content.edit
+import androidx.core.net.toUri
 
 // Data class para representar un archivo de audio
 data class AudioFile(
@@ -237,12 +241,40 @@ fun HomeScreen(onNavigateToPlayer: () -> Unit, onNavigateToPlaylist: () -> Unit,
 @Composable
 fun PlayerScreen(audioId: Long = -1L) {
     val context = LocalContext.current
+    // For saving/restoring last playback state (uri + position)
+    fun saveLastPlayback(context: Context, uriString: String?, positionMs: Long) {
+        if (uriString == null) return
+        try {
+            val prefs = context.getSharedPreferences("bitsbeats_prefs", Context.MODE_PRIVATE)
+            val json = JSONObject().apply {
+                put("uri", uriString)
+                put("position", positionMs)
+                put("updatedAt", System.currentTimeMillis())
+            }
+            prefs.edit { putString("last_playback", json.toString()) }
+        } catch (_: Exception) { }
+    }
+
+    fun loadLastPlayback(context: Context): Pair<String?, Long> {
+        return try {
+            val prefs = context.getSharedPreferences("bitsbeats_prefs", Context.MODE_PRIVATE)
+            val s = prefs.getString("last_playback", null) ?: return Pair(null, 0L)
+            val json = JSONObject(s)
+            val uri = json.optString("uri").takeIf { it.isNotBlank() }
+            val pos = json.optLong("position", 0L)
+            Pair(uri, pos)
+        } catch (e: Exception) {
+            Pair(null, 0L)
+        }
+    }
+
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var sliderPosition by remember { mutableFloatStateOf(0f) }
     var audioTitle by remember { mutableStateOf("Sin canción seleccionada") }
     var audioArtist by remember { mutableStateOf("") }
+    var currentUriString by remember { mutableStateOf<String?>(null) }
 
     val mediaPlayer = remember { MediaPlayer() }
 
@@ -268,26 +300,78 @@ fun PlayerScreen(audioId: Long = -1L) {
                 }
 
                 mediaPlayer.reset()
-                mediaPlayer.setDataSource(context, uri)
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    mediaPlayer.setDataSource(pfd.fileDescriptor)
+                } ?: throw Exception("No se pudo abrir el descriptor para $uri")
                 mediaPlayer.prepare()
                 duration = mediaPlayer.duration.toLong()
+                // set current uri string for persistence
+                currentUriString = uri.toString()
+                saveLastPlayback(context, currentUriString, 0L)
                 mediaPlayer.start()
                 isPlaying = true
             } catch (e: Exception) {
                 audioTitle = "Error al reproducir"
                 audioArtist = e.message ?: ""
             }
+        } else {
+            // audioId == -1L -> intentar restaurar última reproducción desde prefs (URI + position)
+            val (savedUriString, savedPos) = loadLastPlayback(context)
+            if (!savedUriString.isNullOrEmpty()) {
+                try {
+                    val uri = savedUriString.toUri()
+                    mediaPlayer.reset()
+                    context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                        mediaPlayer.setDataSource(pfd.fileDescriptor)
+                    } ?: throw Exception("No se pudo abrir el descriptor para $uri")
+                    mediaPlayer.prepare()
+                    duration = mediaPlayer.duration.toLong()
+                    // obtener metadata si es posible
+                    try {
+                        val contentUri = ContentUris.withAppendedId(
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                            ContentUris.parseId(uri)
+                        )
+                        context.contentResolver.query(
+                            contentUri,
+                            arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST),
+                            null,
+                            null,
+                            null
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                audioTitle = cursor.getString(0) ?: audioTitle
+                                audioArtist = cursor.getString(1) ?: audioArtist
+                            }
+                        }
+                    } catch (_: Exception) { /* ignore */ }
+                    currentUriString = savedUriString
+                    // clamp position
+                    val pos = savedPos.coerceIn(0L, duration)
+                    if (pos > 0) mediaPlayer.seekTo(pos.toInt())
+                    mediaPlayer.start()
+                    isPlaying = true
+                    currentPosition = pos
+                } catch (_: Exception) {
+                    // ignore restore failure
+                }
+            }
         }
     }
 
     // Actualizar la posición de reproducción
     LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            currentPosition = mediaPlayer.currentPosition.toLong()
+        while (true) {
+            // always update currentPosition while player exists; if playing, save periodically
+            currentPosition = try { mediaPlayer.currentPosition.toLong() } catch (_: Exception) { 0L }
             if (duration > 0) {
                 sliderPosition = currentPosition.toFloat() / duration.toFloat()
             }
-            delay(100)
+            // persist current position every second if we have a uri
+            if (!currentUriString.isNullOrEmpty()) {
+                saveLastPlayback(context, currentUriString, currentPosition)
+            }
+            delay(1000)
         }
     }
 
@@ -418,6 +502,8 @@ fun PlayerScreen(audioId: Long = -1L) {
                         if (isPlaying) {
                             mediaPlayer.pause()
                             isPlaying = false
+                            // save position on pause
+                            saveLastPlayback(context, currentUriString, currentPosition)
                         } else {
                             mediaPlayer.start()
                             isPlaying = true
@@ -438,6 +524,7 @@ fun PlayerScreen(audioId: Long = -1L) {
                         val newPosition = (currentPosition + 10000).coerceAtMost(duration)
                         mediaPlayer.seekTo(newPosition.toInt())
                         currentPosition = newPosition
+                        saveLastPlayback(context, currentUriString, currentPosition)
                     },
                     modifier = Modifier.size(64.dp)
                 ) {
