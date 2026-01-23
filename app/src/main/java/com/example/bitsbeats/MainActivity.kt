@@ -254,28 +254,32 @@ object PlaybackController {
     }
 
     fun nextTrack() {
-        if (queue.isEmpty()) {
-            stopPlayback(); return
-        }
+        // If there's no queue, do nothing
+        if (queue.isEmpty()) return
+
+        // If there is a next item, advance. Otherwise do nothing.
         if (queueIndex + 1 < queue.size) {
             queueIndex += 1
             appContext?.let { saveState(it) }
             playCurrentFromQueue()
         } else {
-            // end of queue: stop
-            stopPlayback()
+            // no next track: do nothing
+            return
         }
     }
 
     fun prevTrack() {
-        if (queue.isEmpty()) { stopPlayback(); return }
+        // If there's no queue, do nothing
+        if (queue.isEmpty()) return
+
+        // If there is a previous item, go back. Otherwise do nothing.
         if (queueIndex - 1 >= 0) {
             queueIndex -= 1
             appContext?.let { saveState(it) }
             playCurrentFromQueue()
         } else {
-            // restart current track from beginning
-            seekTo(0)
+            // no previous track: do nothing
+            return
         }
     }
 
