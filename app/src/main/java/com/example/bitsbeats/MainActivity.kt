@@ -11,6 +11,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.widget.Toast
+import java.net.URLEncoder
+import java.net.URLDecoder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -75,6 +78,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -150,19 +154,34 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("playlist") {
                         PlaylistScreen(
-                            onAudioSelected = { audioId ->
-                                navController.navigate("player/$audioId")
+                            onNavigateToPlaylistDetail = { name ->
+                                val enc = URLEncoder.encode(name, "UTF-8")
+                                navController.navigate("playlistDetail/$enc")
+                            },
+                            onCreatePlaylist = { name ->
+                                // handled inside PlaylistScreen using PlaylistStore
+                            }
+                        )
+                    }
+                    composable("playlistDetail/{name}") { backStackEntry ->
+                        val encoded = backStackEntry.arguments?.getString("name") ?: ""
+                        val name = try { URLDecoder.decode(encoded, "UTF-8") } catch (e: Exception) { encoded }
+                        PlaylistDetailScreen(
+                            playlistName = name,
+                            onBack = { navController.popBackStack() },
+                            onAddSongs = {
+                                val enc = URLEncoder.encode(name, "UTF-8")
+                                navController.navigate("filebrowser/$enc")
                             }
                         )
                     }
                     composable("filebrowser") {
-                        FileBrowserScreen(
-                            onFileSelected = { audioId ->
-                                // navigate directly to the single PlayerScreen using audioId
-                                navController.navigate("player/$audioId")
-                            },
-                            onNavigateBack = { navController.popBackStack() }
-                        )
+                        FileBrowserScreen(onFileSelected = { audioId -> navController.navigate("player/$audioId") }, onNavigateBack = { navController.popBackStack() })
+                    }
+                    composable("filebrowser/{addTo}") { backStackEntry ->
+                        val encoded = backStackEntry.arguments?.getString("addTo") ?: ""
+                        val playlistName = try { URLDecoder.decode(encoded, "UTF-8") } catch (e: Exception) { encoded }
+                        FileBrowserScreen(onFileSelected = { audioId -> navController.navigate("player/$audioId") }, onNavigateBack = { navController.popBackStack() }, addToPlaylistName = playlistName)
                     }
                 }
             }
@@ -611,47 +630,369 @@ fun formatDuration(durationMs: Long): String {
     return String.format("%d:%02d", minutes, seconds)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("UNUSED_PARAMETER")
 @Composable
-fun PlaylistScreen(onAudioSelected: (Long) -> Unit = {}) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.DarkGray),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "Mis Playlists",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.padding(bottom = 48.dp)
-            )
+fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePlaylist: (String) -> Unit = {}) {
+    val context = LocalContext.current
+    var showingDialog by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+    var playlists by remember { mutableStateOf<List<String>>(emptyList()) }
+    // Name of playlist pending deletion (to show confirm dialog)
+    var playlistToDelete by remember { mutableStateOf<String?>(null) }
 
-            Button(
-                onClick = { /* TODO: Crear nueva playlist */ },
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "Nueva playlist",
-                    modifier = Modifier.size(24.dp)
-                )
+    LaunchedEffect(Unit) {
+        playlists = PlaylistStore.loadAll(context).keys.toList()
+    }
+
+    // refresh when returning
+    LaunchedEffect(Unit) { /* no-op; UI will update on actions */ }
+
+    Box(modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color.DarkGray), contentAlignment = Alignment.TopCenter) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "Mis Playlists", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(16.dp))
+
+            Button(onClick = { showingDialog = true }, modifier = Modifier.padding(8.dp)) {
+                Icon(imageVector = Icons.Filled.Add, contentDescription = "Nueva playlist", modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.size(8.dp))
-                Text(
-                    text = "New Playlist",
-                    fontSize = 18.sp
-                )
+                Text("New Playlist")
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (playlists.isEmpty()) {
+                Text(text = "No tienes playlists", color = Color.White)
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                    items(playlists) { name ->
+                        Row(modifier = Modifier.fillMaxWidth().clickable { onNavigateToPlaylistDetail(name) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = name, color = Color.White, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { playlistToDelete = name }) {
+                                Icon(imageVector = Icons.Filled.Folder, contentDescription = "Eliminar playlist", tint = Color.LightGray)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Confirm delete dialog
+        if (playlistToDelete != null) {
+            val nameToDelete = playlistToDelete!!
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { playlistToDelete = null },
+                title = { Text("Eliminar playlist") },
+                text = { Text("¿Eliminar la playlist '$nameToDelete'? Esta acción no se puede deshacer.") },
+                confirmButton = {
+                    Button(onClick = {
+                        PlaylistStore.deletePlaylist(context, nameToDelete)
+                        playlists = PlaylistStore.loadAll(context).keys.toList()
+                        playlistToDelete = null
+                        Toast.makeText(context, "Playlist eliminada", Toast.LENGTH_SHORT).show()
+                    }) { Text("Eliminar") }
+                },
+                dismissButton = {
+                    Button(onClick = { playlistToDelete = null }) { Text("Cancelar") }
+                }
+            )
+        }
+
+        if (showingDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showingDialog = false },
+                title = { Text("Nombre de la playlist") },
+                text = {
+                    androidx.compose.material3.TextField(value = newName, onValueChange = { newName = it }, placeholder = { Text("Nombre") })
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (newName.isNotBlank()) {
+                            val ok = PlaylistStore.createPlaylist(context, newName)
+                            if (ok) {
+                                playlists = PlaylistStore.loadAll(context).keys.toList()
+                                showingDialog = false
+                                newName = ""
+                            } else {
+                                Toast.makeText(context, "Ya existe una playlist con ese nombre", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }) { Text("Crear") }
+                },
+                dismissButton = {
+                    Button(onClick = { showingDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+    }
+}
+
+// Playlist detail screen: list songs, play entire playlist sequentially, add songs
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlaylistDetailScreen(playlistName: String, onBack: () -> Unit = {}, onAddSongs: () -> Unit = {}) {
+    val context = LocalContext.current
+    var items by remember { mutableStateOf(PlaylistStore.getPlaylist(context, playlistName)) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentIndex by remember { mutableStateOf(0) }
+    val mediaPlayer = remember { MediaPlayer() }
+
+    DisposableEffect(Unit) {
+        onDispose { mediaPlayer.release() }
+    }
+
+    fun playIndex(index: Int) {
+        if (index < 0 || index >= items.size) return
+        try {
+            val uriString = items[index]["uri"] as? String ?: return
+            val uri = uriString.toUri()
+            mediaPlayer.reset()
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                mediaPlayer.setDataSource(pfd.fileDescriptor)
+            } ?: throw Exception("No se pudo abrir descriptor")
+            mediaPlayer.setOnCompletionListener {
+                // advance
+                if (currentIndex + 1 < items.size) {
+                    currentIndex += 1
+                    playIndex(currentIndex)
+                } else {
+                    isPlaying = false
+                }
+            }
+            mediaPlayer.prepare()
+            mediaPlayer.start()
+            isPlaying = true
+        } catch (e: Exception) {
+            Toast.makeText(context, "No se pudo reproducir: ${e.message}", Toast.LENGTH_SHORT).show()
+            isPlaying = false
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color.DarkGray)) {
+        TopAppBar(title = { Text(text = playlistName, color = Color.White) }, navigationIcon = { IconButton(onClick = onBack) { Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D)))
+
+        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Button(onClick = {
+                if (!isPlaying) {
+                    if (items.isNotEmpty()) { currentIndex = 0; playIndex(0) }
+                } else {
+                    mediaPlayer.pause(); isPlaying = false
+                }
+            }, enabled = items.isNotEmpty()) {
+                Text(if (isPlaying) "PAUSE" else "PLAY")
+            }
+            Button(onClick = onAddSongs) { Text("Add songs") }
+        }
+
+        if (items.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay canciones en esta playlist", color = Color.White) }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                items(items) { item ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = item["title"] as? String ?: "Desconocido", color = Color.White)
+                            Text(text = item["artist"] as? String ?: "Artista desconocido", color = Color.LightGray)
+                        }
+                        Text(text = formatDuration((item["duration"] as? Long) ?: 0L), color = Color.LightGray)
+                    }
+                }
             }
         }
     }
 }
 
-// Función para obtener el contenido de un directorio
+// Extend FileBrowserScreen to support adding to playlist and previewing
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FileBrowserScreen(
+    onFileSelected: (Long) -> Unit = {},
+    onNavigateBack: () -> Unit = {},
+    addToPlaylistName: String? = null
+) {
+    val context = LocalContext.current
+    var showFileBrowser by remember { mutableStateOf(false) }
+    var currentPath by remember { mutableStateOf(Environment.getExternalStorageDirectory().absolutePath) }
+    var files by remember { mutableStateOf<List<FileItem>>(emptyList()) }
+    var audioFiles by remember { mutableStateOf<List<AudioFile>>(emptyList()) }
+    var hasPermission by remember { mutableStateOf(false) }
+
+    val previewPlayer = remember { MediaPlayer() }
+    var previewPlayingId by remember { mutableStateOf<Long?>(null) }
+    // cache mapping from file path -> MediaStore audio id (nullable)
+    val pathToId = remember { androidx.compose.runtime.mutableStateMapOf<String, Long?>() }
+
+    DisposableEffect(Unit) { onDispose { previewPlayer.release(); previewPlayingId = null } }
+
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+    val permissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted -> hasPermission = isGranted; if (isGranted) { audioFiles = getRecentAudioFiles(context.contentResolver); files = getDirectoryContents(currentPath) } }
+
+    LaunchedEffect(Unit) {
+        hasPermission = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        if (hasPermission) { audioFiles = getRecentAudioFiles(context.contentResolver); files = getDirectoryContents(currentPath) }
+    }
+
+    // Reload files whenever currentPath changes and populate path->id cache in IO
+    LaunchedEffect(currentPath) {
+        if (hasPermission) {
+            files = getDirectoryContents(currentPath)
+            // populate cache for audio files
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val newMap = mutableMapOf<String, Long?>()
+                files.filter { it.isAudio }.forEach { f ->
+                    try {
+                        val id = queryAudioIdFromPath(context.contentResolver, f.path)
+                        newMap[f.path] = id
+                    } catch (_: Exception) {
+                        newMap[f.path] = null
+                    }
+                }
+                // update state map on main thread
+                newMap.forEach { (k, v) -> pathToId[k] = v }
+            }
+        }
+    }
+
+    // Helper to preview an audio by id (play/pause preview)
+    fun togglePreview(audioId: Long) {
+        if (previewPlayingId == audioId) {
+            try { previewPlayer.pause() } catch (_: Exception) {}
+            previewPlayingId = null
+            return
+        }
+        try { previewPlayer.reset() } catch (_: Exception) {}
+        val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audioId)
+        try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                previewPlayer.setDataSource(pfd.fileDescriptor)
+            } ?: throw Exception("no pfd")
+            previewPlayer.setOnCompletionListener { previewPlayingId = null }
+            previewPlayer.prepare()
+            previewPlayer.start()
+            previewPlayingId = audioId
+        } catch (e: Exception) {
+            Toast.makeText(context, "No se puede preescuchar", Toast.LENGTH_SHORT).show()
+            previewPlayingId = null
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color.DarkGray)) {
+        TopAppBar(
+            title = { Text(text = if (!showFileBrowser) "Canciones Recientes" else File(currentPath).name.takeIf { it.isNotBlank() } ?: "Almacenamiento", color = Color.White) },
+            navigationIcon = {
+                IconButton(onClick = {
+                    if (showFileBrowser) {
+                        // go to parent dir if possible, otherwise go back to recent view
+                        val parentPath = File(currentPath).parent
+                        if (parentPath != null && parentPath.startsWith(Environment.getExternalStorageDirectory().absolutePath)) {
+                            currentPath = parentPath
+                        } else {
+                            showFileBrowser = false
+                        }
+                    } else {
+                        onNavigateBack()
+                    }
+                }) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
+                }
+            },
+            actions = { IconButton(onClick = { showFileBrowser = !showFileBrowser }) { Icon(imageVector = Icons.Filled.Folder, contentDescription = "Explorar", tint = Color(0xFFFFD54F)) } },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D))
+        )
+
+        if (!hasPermission) {
+            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text("Se necesita permiso para acceder a los archivos", color = Color.White)
+                Button(onClick = { permissionLauncher.launch(permission) }) { Text("Conceder permiso") }
+            }
+            return@Column
+        }
+
+        if (!showFileBrowser) {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(audioFiles) { audio ->
+                    Row(modifier = Modifier.fillMaxWidth().background(Color.Gray, shape = RoundedCornerShape(12.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(audio.title, color = Color.White)
+                            Text(audio.artist.ifEmpty { "Artista desconocido" }, color = Color.LightGray)
+                        }
+                        Row {
+                            IconButton(onClick = { togglePreview(audio.id) }) {
+                                Icon(imageVector = if (previewPlayingId == audio.id) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = "Preview", tint = Color.White)
+                            }
+                            if (addToPlaylistName != null) {
+                                IconButton(onClick = {
+                                    val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audio.id).toString()
+                                    PlaylistStore.addItemToPlaylist(context, addToPlaylistName, uri, audio.title, audio.artist, audio.duration)
+                                    Toast.makeText(context, "Añadida a $addToPlaylistName", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(imageVector = Icons.Filled.Add, contentDescription = "Añadir", tint = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(files) { fileItem ->
+                    // resolve the mediaStore id once per row from cache (nullable)
+                    val resolvedId = if (fileItem.isAudio) pathToId[fileItem.path] else null
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (fileItem.isDirectory) {
+                                    currentPath = fileItem.path
+                                }
+                            }
+                            .background(if (fileItem.isDirectory) Color(0xFF4A4A4A) else Color.Gray, shape = RoundedCornerShape(12.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(fileItem.name, color = Color.White)
+                        }
+                        Row {
+                            if (fileItem.isAudio) {
+                                IconButton(onClick = {
+                                    if (resolvedId != null) togglePreview(resolvedId)
+                                    else Toast.makeText(context, "No indexado en MediaStore", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(
+                                        imageVector = if (resolvedId != null && resolvedId == previewPlayingId) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                        contentDescription = "Preview",
+                                        tint = Color.White
+                                    )
+                                }
+
+                                if (addToPlaylistName != null) {
+                                    IconButton(onClick = {
+                                        if (resolvedId != null) {
+                                            val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString()
+                                            // get metadata
+                                            var title = File(fileItem.path).name
+                                            var artist = ""
+                                            var duration = 0L
+                                            try {
+                                                context.contentResolver.query(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId), arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c -> if (c.moveToFirst()) { title = c.getString(0) ?: title; artist = c.getString(1) ?: ""; duration = c.getLong(2) } }
+                                            } catch (_: Exception) {}
+                                            PlaylistStore.addItemToPlaylist(context, addToPlaylistName, uri, title, artist, duration)
+                                            Toast.makeText(context, "Añadida a $addToPlaylistName", Toast.LENGTH_SHORT).show()
+                                        } else Toast.makeText(context, "No indexado", Toast.LENGTH_SHORT).show()
+                                    }) { Icon(imageVector = Icons.Filled.Add, contentDescription = "Añadir", tint = Color.White) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// Función para obtener el contenido de un directorio (usada por el explorador)
 fun getDirectoryContents(path: String): List<FileItem> {
     val file = File(path)
     val items = mutableListOf<FileItem>()
@@ -681,284 +1022,7 @@ fun getDirectoryContents(path: String): List<FileItem> {
     return items
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FileBrowserScreen(
-    onFileSelected: (Long) -> Unit = {},
-    onNavigateBack: () -> Unit = {}
-) {
-    val context = LocalContext.current
-    var showFileBrowser by remember { mutableStateOf(false) }
-    var currentPath by remember { mutableStateOf(Environment.getExternalStorageDirectory().absolutePath) }
-    var files by remember { mutableStateOf<List<FileItem>>(emptyList()) }
-    var audioFiles by remember { mutableStateOf<List<AudioFile>>(emptyList()) }
-    var hasPermission by remember { mutableStateOf(false) }
-
-    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        Manifest.permission.READ_MEDIA_AUDIO
-    } else {
-        Manifest.permission.READ_EXTERNAL_STORAGE
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasPermission = isGranted
-        if (isGranted) {
-            audioFiles = getRecentAudioFiles(context.contentResolver)
-            files = getDirectoryContents(currentPath)
-        }
-    }
-
-    // Verificar permiso al iniciar
-    LaunchedEffect(Unit) {
-        hasPermission = ContextCompat.checkSelfPermission(
-            context,
-            permission
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (hasPermission) {
-            audioFiles = getRecentAudioFiles(context.contentResolver)
-            files = getDirectoryContents(currentPath)
-        }
-    }
-
-    // Actualizar archivos cuando cambia el directorio
-    LaunchedEffect(currentPath) {
-        if (hasPermission) {
-            files = getDirectoryContents(currentPath)
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.DarkGray)
-    ) {
-        if (!showFileBrowser) {
-            // Vista de canciones recientes
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Barra superior
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "Canciones Recientes",
-                            color = Color.White
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Atrás",
-                                tint = Color.White
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { showFileBrowser = true }) {
-                            Icon(
-                                imageVector = Icons.Filled.Folder,
-                                contentDescription = "Explorar carpetas",
-                                tint = Color(0xFFFFD54F)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF2D2D2D)
-                    )
-                )
-
-                if (!hasPermission) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "Se necesita permiso para acceder a los archivos",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-                        Button(onClick = { permissionLauncher.launch(permission) }) {
-                            Text("Conceder permiso")
-                        }
-                    }
-                } else if (audioFiles.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No se encontraron archivos de audio",
-                            color = Color.White,
-                            fontSize = 18.sp
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(audioFiles) { audio ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.Gray, shape = RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        // Use the audio ID directly for playback
-                                        onFileSelected(audio.id)
-                                    }
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.MusicNote,
-                                    contentDescription = "Audio",
-                                    modifier = Modifier.size(40.dp),
-                                    tint = Color.White
-                                )
-                                Spacer(modifier = Modifier.size(16.dp))
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = audio.title,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = audio.artist.ifEmpty { "Artista desconocido" },
-                                        fontSize = 14.sp,
-                                        color = Color.LightGray,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Text(
-                                    text = formatDuration(audio.duration),
-                                    fontSize = 14.sp,
-                                    color = Color.LightGray
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            // Vista de explorador de archivos
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                TopAppBar(
-                    title = {
-                        val fileName = File(currentPath).name
-                        // Si el nombre es vacío, un número (como "0"), o es la raíz del almacenamiento
-                        val isRoot = fileName.isEmpty() || fileName == "0" ||
-                                     currentPath == Environment.getExternalStorageDirectory().absolutePath
-                        val directoryName = if (isRoot) "Almacenamiento" else fileName
-                        Text(
-                            text = directoryName,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            val parentPath = File(currentPath).parent
-                            if (parentPath != null && parentPath.startsWith(Environment.getExternalStorageDirectory().absolutePath)) {
-                                currentPath = parentPath
-                            } else {
-                                showFileBrowser = false
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Atrás",
-                                tint = Color.White
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF2D2D2D)
-                    )
-                )
-
-                if (files.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No hay archivos de audio en esta carpeta",
-                            color = Color.White,
-                            fontSize = 18.sp
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(files) { fileItem ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        if (fileItem.isDirectory) Color(0xFF4A4A4A) else Color.Gray,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable {
-                                        if (fileItem.isDirectory) {
-                                            currentPath = fileItem.path
-                                        } else {
-                                            // Resolve the file path to a MediaStore audioId and invoke onFileSelected(audioId)
-                                            val resolved = queryAudioIdFromPath(context.contentResolver, fileItem.path)
-                                            if (resolved != null) {
-                                                onFileSelected(resolved)
-                                            }
-                                        }
-                                    }
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (fileItem.isDirectory) Icons.Filled.Folder else Icons.Filled.MusicNote,
-                                    contentDescription = if (fileItem.isDirectory) "Carpeta" else "Audio",
-                                    modifier = Modifier.size(40.dp),
-                                    tint = if (fileItem.isDirectory) Color(0xFFFFD54F) else Color.White
-                                )
-                                Spacer(modifier = Modifier.size(16.dp))
-                                Text(
-                                    text = fileItem.name,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.White,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-// Helper function to resolve a file path to a MediaStore audio ID
+// Helper para resolver una ruta de archivo a un audioId de MediaStore
 fun queryAudioIdFromPath(contentResolver: ContentResolver, filePath: String): Long? {
     val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DATA)
     val selection = "${MediaStore.Audio.Media.DATA} = ?"
@@ -977,6 +1041,82 @@ fun queryAudioIdFromPath(contentResolver: ContentResolver, filePath: String): Lo
         }
     }
     return null
+}
+
+// Playlist storage helpers (simple JSON in SharedPreferences)
+object PlaylistStore {
+    private const val PREFS = "bitsbeats_prefs"
+    private const val KEY_PLAYLISTS = "playlists_json"
+
+    // Format: JSON object { "playlistName": [ {"uri": "...", "title":"...","artist":"...","duration":12345}, ... ], ... }
+    fun loadAll(context: Context): Map<String, List<Map<String, Any>>> {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val s = prefs.getString(KEY_PLAYLISTS, null) ?: return emptyMap()
+        return try {
+            val root = JSONObject(s)
+            val result = mutableMapOf<String, List<Map<String, Any>>>()
+            root.keys().forEach { name ->
+                val arr = root.optJSONArray(name) ?: return@forEach
+                val list = mutableListOf<Map<String, Any>>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val map = mutableMapOf<String, Any>()
+                    map["uri"] = obj.optString("uri")
+                    map["title"] = obj.optString("title")
+                    map["artist"] = obj.optString("artist")
+                    map["duration"] = obj.optLong("duration", 0L)
+                    list.add(map)
+                }
+                result[name] = list
+            }
+            result
+        } catch (e: Exception) { emptyMap() }
+    }
+
+    private fun saveAll(context: Context, data: Map<String, List<Map<String, Any>>>) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val root = JSONObject()
+        data.forEach { (k, v) ->
+            val arr = org.json.JSONArray()
+            v.forEach { item ->
+                val obj = JSONObject()
+                obj.put("uri", item["uri"] ?: "")
+                obj.put("title", item["title"] ?: "")
+                obj.put("artist", item["artist"] ?: "")
+                obj.put("duration", item["duration"] ?: 0L)
+                arr.put(obj)
+            }
+            root.put(k, arr)
+        }
+        prefs.edit { putString(KEY_PLAYLISTS, root.toString()) }
+    }
+
+    fun createPlaylist(context: Context, name: String): Boolean {
+        val all = loadAll(context).toMutableMap()
+        if (all.containsKey(name)) return false
+        all[name] = emptyList()
+        saveAll(context, all)
+        return true
+    }
+
+    fun deletePlaylist(context: Context, name: String) {
+        val all = loadAll(context).toMutableMap()
+        all.remove(name)
+        saveAll(context, all)
+    }
+
+    fun addItemToPlaylist(context: Context, playlistName: String, uri: String, title: String, artist: String, duration: Long) {
+        val all = loadAll(context).toMutableMap()
+        val list = all[playlistName]?.toMutableList() ?: mutableListOf()
+        val item = mapOf("uri" to uri, "title" to title, "artist" to artist, "duration" to duration)
+        list.add(item)
+        all[playlistName] = list
+        saveAll(context, all)
+    }
+
+    fun getPlaylist(context: Context, name: String): List<Map<String, Any>> {
+        return loadAll(context)[name] ?: emptyList()
+    }
 }
 
 @Preview(showBackground = true)
