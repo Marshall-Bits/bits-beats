@@ -20,7 +20,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -253,6 +256,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             BitsBeatsTheme {
                 val navController = rememberNavController()
+                val appContext = LocalContext.current
                 Box(modifier = Modifier.fillMaxSize()) {
                     NavHost(
                         navController = navController,
@@ -326,21 +330,30 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("filebrowser") {
-                            FileBrowserScreen(onFileSelected = { audioId -> navController.navigate("player/$audioId") }, onNavigateBack = { navController.popBackStack() })
+                            FileBrowserScreen(onFileSelected = { audioId -> PlaybackController.playAudioId(appContext, audioId) }, onNavigateBack = { navController.popBackStack() })
                         }
 
                         composable("filebrowser/{addTo}") { backStackEntry ->
                             val encoded = backStackEntry.arguments?.getString("addTo") ?: ""
                             val playlistName = try { URLDecoder.decode(encoded, "UTF-8") } catch (e: Exception) { encoded }
-                            FileBrowserScreen(onFileSelected = { audioId -> navController.navigate("player/$audioId") }, onNavigateBack = { navController.popBackStack() }, addToPlaylistName = playlistName)
+                            FileBrowserScreen(onFileSelected = { audioId -> PlaybackController.playAudioId(appContext, audioId) }, onNavigateBack = { navController.popBackStack() }, addToPlaylistName = playlistName)
                         }
                     }
 
-                    // Mini player overlay: show on all screens except the PlayerScreen route
+                    // Mini player overlay: show on all screens except the PlayerScreen route, with slide up/down animations
                     val navBackStack by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStack?.destination?.route ?: ""
-                    if (!currentRoute.startsWith("player") && PlaybackController.currentUri != null) {
-                        PlaybackMiniPlayer(navController = navController, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 8.dp))
+                    val showMini = !currentRoute.startsWith("player") && PlaybackController.currentUri != null
+                    AnimatedVisibility(
+                        visible = showMini,
+                        // position the AnimatedVisibility container at the bottom (no nav padding here so animation can start off-screen)
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 8.dp),
+                        // start from further below (double height) so it appears to come from outside the screen edge
+                        enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight * 2 }, animationSpec = tween(300)),
+                        exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight * 2 }, animationSpec = tween(300))
+                    ) {
+                        // put navigationBarsPadding on the child so final position is above system navigation
+                        PlaybackMiniPlayer(navController = navController, modifier = Modifier.fillMaxWidth().navigationBarsPadding())
                     }
                 }
             }
