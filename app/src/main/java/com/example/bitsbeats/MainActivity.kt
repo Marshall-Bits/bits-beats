@@ -1,6 +1,7 @@
 package com.example.bitsbeats
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.pm.PackageManager
@@ -74,15 +75,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.bitsbeats.ui.theme.BitsBeatsTheme
 import kotlinx.coroutines.delay
 import java.io.File
-import java.net.URLDecoder
-import java.net.URLEncoder
 
 // Data class para representar un archivo de audio
 data class AudioFile(
@@ -146,11 +144,6 @@ class MainActivity : ComponentActivity() {
                         val audioId = backStackEntry.arguments?.getString("audioId")?.toLongOrNull() ?: -1L
                         PlayerScreen(audioId = audioId)
                     }
-                    composable("playerFile/{filePath}") { backStackEntry ->
-                        val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
-                        val filePath = URLDecoder.decode(encodedPath, "UTF-8")
-                        PlayerScreenFromFile(filePath = filePath)
-                    }
                     composable("playlist") {
                         PlaylistScreen(
                             onAudioSelected = { audioId ->
@@ -160,9 +153,9 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("filebrowser") {
                         FileBrowserScreen(
-                            onFileSelected = { filePath ->
-                                val encodedPath = URLEncoder.encode(filePath, "UTF-8")
-                                navController.navigate("playerFile/$encodedPath")
+                            onFileSelected = { audioId ->
+                                // navigate directly to the single PlayerScreen using audioId
+                                navController.navigate("player/$audioId")
                             },
                             onNavigateBack = { navController.popBackStack() }
                         )
@@ -513,12 +506,14 @@ fun getRecentAudioFiles(contentResolver: ContentResolver): List<AudioFile> {
 }
 
 // Función para formatear la duración en mm:ss
+@SuppressLint("DefaultLocale")
 fun formatDuration(durationMs: Long): String {
     val minutes = (durationMs / 1000) / 60
     val seconds = (durationMs / 1000) % 60
     return String.format("%d:%02d", minutes, seconds)
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun PlaylistScreen(onAudioSelected: (Long) -> Unit = {}) {
     Box(
@@ -591,7 +586,7 @@ fun getDirectoryContents(path: String): List<FileItem> {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileBrowserScreen(
-    onFileSelected: (String) -> Unit = {},
+    onFileSelected: (Long) -> Unit = {},
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -718,20 +713,8 @@ fun FileBrowserScreen(
                                     .fillMaxWidth()
                                     .background(Color.Gray, shape = RoundedCornerShape(12.dp))
                                     .clickable {
-                                        // Obtener la ruta del archivo desde MediaStore
-                                        val uri = ContentUris.withAppendedId(
-                                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                            audio.id
-                                        )
-                                        val projection = arrayOf(MediaStore.Audio.Media.DATA)
-                                        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                                            if (cursor.moveToFirst()) {
-                                                val path = cursor.getString(0)
-                                                if (path != null) {
-                                                    onFileSelected(path)
-                                                }
-                                            }
-                                        }
+                                        // Use the audio ID directly for playback
+                                        onFileSelected(audio.id)
                                     }
                                     .padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -755,7 +738,7 @@ fun FileBrowserScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = if (audio.artist.isNotEmpty()) audio.artist else "Artista desconocido",
+                                        text = audio.artist.ifEmpty { "Artista desconocido" },
                                         fontSize = 14.sp,
                                         color = Color.LightGray,
                                         maxLines = 1,
@@ -842,7 +825,11 @@ fun FileBrowserScreen(
                                         if (fileItem.isDirectory) {
                                             currentPath = fileItem.path
                                         } else {
-                                            onFileSelected(fileItem.path)
+                                            // Resolve the file path to a MediaStore audioId and invoke onFileSelected(audioId)
+                                            val resolved = queryAudioIdFromPath(context.contentResolver, fileItem.path)
+                                            if (resolved != null) {
+                                                onFileSelected(resolved)
+                                            }
                                         }
                                     }
                                     .padding(16.dp),
@@ -872,195 +859,26 @@ fun FileBrowserScreen(
     }
 }
 
-@Composable
-fun PlayerScreenFromFile(filePath: String) {
-    val context = LocalContext.current
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
-    var sliderPosition by remember { mutableFloatStateOf(0f) }
-    var audioTitle by remember { mutableStateOf("Sin canción seleccionada") }
 
-    val mediaPlayer = remember { MediaPlayer() }
+// Helper function to resolve a file path to a MediaStore audio ID
+fun queryAudioIdFromPath(contentResolver: ContentResolver, filePath: String): Long? {
+    val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DATA)
+    val selection = "${MediaStore.Audio.Media.DATA} = ?"
+    val selectionArgs = arrayOf(filePath)
 
-    // Cargar y reproducir el audio cuando se selecciona
-    LaunchedEffect(filePath) {
-        if (filePath.isNotEmpty()) {
-            try {
-                val file = File(filePath)
-                audioTitle = file.nameWithoutExtension
-
-                mediaPlayer.reset()
-                mediaPlayer.setDataSource(context, file.toUri())
-                mediaPlayer.prepare()
-                duration = mediaPlayer.duration.toLong()
-                mediaPlayer.start()
-                isPlaying = true
-            } catch (e: Exception) {
-                audioTitle = "Error al reproducir"
-            }
+    contentResolver.query(
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+        projection,
+        selection,
+        selectionArgs,
+        null
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            return cursor.getLong(idColumn)
         }
     }
-
-    // Actualizar la posición de reproducción
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            currentPosition = mediaPlayer.currentPosition.toLong()
-            if (duration > 0) {
-                sliderPosition = currentPosition.toFloat() / duration.toFloat()
-            }
-            delay(100)
-        }
-    }
-
-    // Liberar el MediaPlayer cuando se sale de la pantalla
-    DisposableEffect(Unit) {
-        onDispose {
-            mediaPlayer.release()
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.DarkGray),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(24.dp)
-        ) {
-            // Imagen del disco
-            Box(
-                modifier = Modifier
-                    .size(200.dp)
-                    .clip(CircleShape)
-                    .background(Color.Gray),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Album,
-                    contentDescription = "Album",
-                    modifier = Modifier.size(180.dp),
-                    tint = Color.White
-                )
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Título
-            Text(
-                text = audioTitle,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Barra de progreso
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Slider(
-                    value = sliderPosition,
-                    onValueChange = { newValue ->
-                        sliderPosition = newValue
-                        val newPosition = (newValue * duration).toLong()
-                        mediaPlayer.seekTo(newPosition.toInt())
-                        currentPosition = newPosition
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.Gray
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Tiempos
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = formatDuration(currentPosition),
-                        fontSize = 12.sp,
-                        color = Color.LightGray
-                    )
-                    Text(
-                        text = formatDuration(duration),
-                        fontSize = 12.sp,
-                        color = Color.LightGray
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Botones de reproducción
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = {
-                        val newPosition = (currentPosition - 10000).coerceAtLeast(0)
-                        mediaPlayer.seekTo(newPosition.toInt())
-                        currentPosition = newPosition
-                    },
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.ChevronLeft,
-                        contentDescription = "Retroceder",
-                        modifier = Modifier.size(48.dp),
-                        tint = Color.White
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        if (isPlaying) {
-                            mediaPlayer.pause()
-                            isPlaying = false
-                        } else {
-                            mediaPlayer.start()
-                            isPlaying = true
-                        }
-                    },
-                    modifier = Modifier.size(80.dp)
-                ) {
-                    Icon(
-                        if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (isPlaying) "Pausar" else "Reproducir",
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.White
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        val newPosition = (currentPosition + 10000).coerceAtMost(duration)
-                        mediaPlayer.seekTo(newPosition.toInt())
-                        currentPosition = newPosition
-                    },
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.ChevronRight,
-                        contentDescription = "Avanzar",
-                        modifier = Modifier.size(48.dp),
-                        tint = Color.White
-                    )
-                }
-            }
-        }
-    }
+    return null
 }
 
 @Preview(showBackground = true)
