@@ -47,9 +47,8 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -72,7 +71,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,10 +85,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -104,8 +100,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 import androidx.core.content.edit
-import androidx.core.net.toUri
-import androidx.compose.ui.zIndex
 
 // Data class para representar un archivo de audio
 data class AudioFile(
@@ -125,6 +119,7 @@ data class FileItem(
 
 // Central playback controller shared across screens (manages MediaPlayer & observable state)
 object PlaybackController {
+    // current playing track
     var currentUri by mutableStateOf<String?>(null)
     var title by mutableStateOf("Sin canción")
     var artist by mutableStateOf("")
@@ -132,19 +127,53 @@ object PlaybackController {
     var currentPosition by mutableStateOf(0L)
     var duration by mutableStateOf(0L)
 
+    // queue management: list of track URIs (strings) and current index
+    var queue by mutableStateOf<List<String>>(emptyList())
+    var queueIndex by mutableStateOf(-1)
+
     private var mediaPlayer: MediaPlayer? = null
     private var tickerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main)
+    private var appContext: Context? = null
+
+    /** Play a list of URIs as a queue starting at [startIndex]. This replaces any existing queue. */
+    fun playQueue(context: Context, uris: List<String>, startIndex: Int = 0) {
+        if (uris.isEmpty()) return
+        queue = uris
+        queueIndex = startIndex.coerceIn(0, uris.size - 1)
+        appContext = context.applicationContext
+        playCurrentFromQueue()
+    }
+
+    private fun playCurrentFromQueue() {
+        val ctx = appContext ?: return
+        val idx = queueIndex
+        if (idx < 0 || idx >= queue.size) {
+            // nothing to play
+            stopPlayback()
+            return
+        }
+        val uriStr = queue[idx]
+        try {
+            val uri = android.net.Uri.parse(uriStr)
+            playUri(ctx, uri)
+        } catch (e: Exception) {
+            // skip to next on error
+            nextTrack()
+        }
+    }
 
     fun playAudioId(context: Context, audioId: Long) {
         try {
             val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audioId)
-            playUri(context, uri)
+            // set single-item queue
+            playQueue(context, listOf(uri.toString()), 0)
         } catch (_: Exception) {}
     }
 
-    fun playUri(context: Context, uri: android.net.Uri) {
+    private fun playUri(context: Context, uri: android.net.Uri) {
         try {
+            appContext = context.applicationContext
             // query metadata
             try {
                 context.contentResolver.query(uri, arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c ->
@@ -167,10 +196,15 @@ object PlaybackController {
                 currentUri = uri.toString()
                 isPlaying = true
                 mp.start()
+                // on completion advance to next in queue
+                mp.setOnCompletionListener {
+                    // move to next track automatically
+                    nextTrack()
+                }
                 startTicker()
             }
 
-            // persist last playback
+            // persist last playback (position 0)
             try {
                 val prefs = context.getSharedPreferences("bitsbeats_prefs", Context.MODE_PRIVATE)
                 val json = JSONObject().apply {
@@ -208,7 +242,6 @@ object PlaybackController {
         tickerJob = scope.launch {
             while (true) {
                 currentPosition = mediaPlayer?.currentPosition?.toLong() ?: 0L
-                // persist occasionally
                 kotlinx.coroutines.delay(500)
             }
         }
@@ -217,6 +250,42 @@ object PlaybackController {
     private fun stopTicker() {
         tickerJob?.cancel()
         tickerJob = null
+    }
+
+    fun nextTrack() {
+        if (queue.isEmpty()) {
+            stopPlayback(); return
+        }
+        if (queueIndex + 1 < queue.size) {
+            queueIndex += 1
+            playCurrentFromQueue()
+        } else {
+            // end of queue: stop
+            stopPlayback()
+        }
+    }
+
+    fun prevTrack() {
+        if (queue.isEmpty()) { stopPlayback(); return }
+        if (queueIndex - 1 >= 0) {
+            queueIndex -= 1
+            playCurrentFromQueue()
+        } else {
+            // restart current track from beginning
+            seekTo(0)
+        }
+    }
+
+    private fun stopPlayback() {
+        stopTicker()
+        try { mediaPlayer?.release() } catch (_: Exception) {}
+        mediaPlayer = null
+        isPlaying = false
+        currentUri = null
+        currentPosition = 0L
+        duration = 0L
+        queue = emptyList()
+        queueIndex = -1
     }
 
     fun restoreLast(context: Context) {
@@ -488,11 +557,20 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
             Spacer(modifier = Modifier.height(24.dp))
 
             Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { PlaybackController.seekTo((PlaybackController.currentPosition - 10000L).coerceAtLeast(0L).toInt()) }, modifier = Modifier.size(64.dp)) { Icon(Icons.Filled.ChevronLeft, contentDescription = "Retroceder", modifier = Modifier.size(48.dp), tint = Color.White) }
+                // Previous track
+                IconButton(onClick = { PlaybackController.prevTrack() }, modifier = Modifier.size(64.dp)) {
+                    Icon(Icons.Filled.ChevronLeft, contentDescription = "Canción anterior", modifier = Modifier.size(48.dp), tint = Color.White)
+                }
 
-                IconButton(onClick = { PlaybackController.togglePlayPause() }, modifier = Modifier.size(80.dp)) { Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", modifier = Modifier.size(64.dp), tint = Color.White) }
+                // Play / Pause
+                IconButton(onClick = { PlaybackController.togglePlayPause() }, modifier = Modifier.size(80.dp)) {
+                    Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", modifier = Modifier.size(64.dp), tint = Color.White)
+                }
 
-                IconButton(onClick = { PlaybackController.seekTo((PlaybackController.currentPosition + 10000L).coerceAtMost(PlaybackController.duration).toInt()) }, modifier = Modifier.size(64.dp)) { Icon(Icons.Filled.ChevronRight, contentDescription = "Avanzar", modifier = Modifier.size(48.dp), tint = Color.White) }
+                // Next track
+                IconButton(onClick = { PlaybackController.nextTrack() }, modifier = Modifier.size(64.dp)) {
+                    Icon(Icons.Filled.ChevronRight, contentDescription = "Siguiente canción", modifier = Modifier.size(48.dp), tint = Color.White)
+                }
             }
         }
     }
@@ -707,38 +785,22 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
 fun PlaylistDetailScreen(playlistName: String, onBack: () -> Unit = {}, onAddSongs: () -> Unit = {}) {
     val context = LocalContext.current
     var items by remember { mutableStateOf(PlaylistStore.getPlaylist(context, playlistName)) }
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentIndex by remember { mutableStateOf(0) }
-    val mediaPlayer = remember { MediaPlayer() }
+
+    // Observe controller state
+    val playbackIsPlaying = PlaybackController.isPlaying
 
     DisposableEffect(Unit) {
-        onDispose { mediaPlayer.release() }
+        onDispose { /* nothing to release */ }
     }
 
     fun playIndex(index: Int) {
         if (index < 0 || index >= items.size) return
         try {
-            val uriString = items[index]["uri"] as? String ?: return
-            val uri = uriString.toUri()
-            mediaPlayer.reset()
-            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                mediaPlayer.setDataSource(pfd.fileDescriptor)
-            } ?: throw Exception("No se pudo abrir descriptor")
-            mediaPlayer.setOnCompletionListener {
-                // advance
-                if (currentIndex + 1 < items.size) {
-                    currentIndex += 1
-                    playIndex(currentIndex)
-                } else {
-                    isPlaying = false
-                }
-            }
-            mediaPlayer.prepare()
-            mediaPlayer.start()
-            isPlaying = true
+            val uris = items.map { it["uri"] as? String ?: "" }.filter { it.isNotBlank() }
+            if (uris.isEmpty()) return
+            PlaybackController.playQueue(context, uris, index)
         } catch (e: Exception) {
             Toast.makeText(context, "No se pudo reproducir: ${e.message}", Toast.LENGTH_SHORT).show()
-            isPlaying = false
         }
     }
 
@@ -747,13 +809,10 @@ fun PlaylistDetailScreen(playlistName: String, onBack: () -> Unit = {}, onAddSon
 
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Button(onClick = {
-                if (!isPlaying) {
-                    if (items.isNotEmpty()) { currentIndex = 0; playIndex(0) }
-                } else {
-                    mediaPlayer.pause(); isPlaying = false
-                }
+                if (items.isNotEmpty()) { playIndex(0) }
+                else PlaybackController.togglePlayPause()
             }, enabled = items.isNotEmpty()) {
-                Text(if (isPlaying) "PAUSE" else "PLAY")
+                Text(if (playbackIsPlaying) "PAUSE" else "PLAY")
             }
             Button(onClick = onAddSongs) { Text("Add songs") }
         }
@@ -762,8 +821,8 @@ fun PlaylistDetailScreen(playlistName: String, onBack: () -> Unit = {}, onAddSon
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay canciones en esta playlist", color = Color.White) }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                items(items) { item ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                items(items.withIndex().toList()) { (idx, item) ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(8.dp).clickable { playIndex(idx) }, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(text = item["title"] as? String ?: "Desconocido", color = Color.White)
                             Text(text = item["artist"] as? String ?: "Artista desconocido", color = Color.LightGray)
