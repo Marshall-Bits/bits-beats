@@ -42,19 +42,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -70,9 +71,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,7 +82,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -96,7 +95,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.bitsbeats.ui.theme.BitsBeatsTheme
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +103,7 @@ import org.json.JSONObject
 import java.io.File
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import androidx.compose.ui.zIndex
 
 // Data class para representar un archivo de audio
 data class AudioFile(
@@ -344,16 +343,55 @@ class MainActivity : ComponentActivity() {
                     val navBackStack by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStack?.destination?.route ?: ""
                     val showMini = !currentRoute.startsWith("player") && PlaybackController.currentUri != null
+                    // Bottom navigation menu height
+                    val bottomNavHeight = 64.dp
+
                     AnimatedVisibility(
                         visible = showMini,
-                        // position the AnimatedVisibility container at the bottom (no nav padding here so animation can start off-screen)
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 8.dp),
-                        // start from further below (double height) so it appears to come from outside the screen edge
+                        // align AnimatedVisibility at bottom, respect system nav insets and pad upwards so mini-player sits neatly above the bottom nav menu
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 8.dp).padding(bottom = bottomNavHeight + 32.dp).zIndex(0f),
+                        // start from further below so it appears to come from outside the screen edge
                         enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight * 2 }, animationSpec = tween(300)),
                         exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight * 2 }, animationSpec = tween(300))
                     ) {
-                        // put navigationBarsPadding on the child so final position is above system navigation
-                        PlaybackMiniPlayer(navController = navController, modifier = Modifier.fillMaxWidth().navigationBarsPadding())
+                        // child should fill the width provided by the AnimatedVisibility container and have a controlled height
+                        PlaybackMiniPlayer(navController = navController, modifier = Modifier.fillMaxWidth().height(64.dp))
+                     }
+
+                    // Bottom navigation menu: always visible at the bottom (above system nav), below mini-player
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(horizontal = 8.dp)
+                            .fillMaxWidth()
+                            .height(bottomNavHeight)
+                            .background(Color.Black.copy(alpha = 0.65f), shape = RoundedCornerShape(12.dp))
+                            .zIndex(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                            // Home
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { navController.navigate("home") }) {
+                                Icon(imageVector = Icons.Filled.Home, contentDescription = "Inicio", tint = Color.White, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(text = "Inicio", color = Color.White, fontSize = 12.sp)
+                            }
+
+                            // Playlists
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { navController.navigate("playlist") }) {
+                                Icon(imageVector = Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Playlists", tint = Color.White, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(text = "Playlists", color = Color.White, fontSize = 12.sp)
+                            }
+
+                            // Search (unused for now)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { /* no-op */ }) {
+                                Icon(imageVector = Icons.Filled.Search, contentDescription = "Buscar", tint = Color.White, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(text = "Buscar", color = Color.White, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
             }
