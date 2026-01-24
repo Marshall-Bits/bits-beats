@@ -9,6 +9,8 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -84,6 +86,15 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
             Spacer(modifier = Modifier.height(24.dp))
 
             Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                // Repeat toggle: OFF -> REPEAT_ALL -> REPEAT_ONE
+                val repeatMode = PlaybackController.repeatMode
+                val repeatActive = repeatMode != com.example.bitsbeats.ui.components.PlaybackController.RepeatMode.OFF
+                val repeatIcon = if (repeatMode == com.example.bitsbeats.ui.components.PlaybackController.RepeatMode.REPEAT_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat
+                val repeatTint = if (repeatActive) Color(0xFF1DB954) else Color.White
+                IconButton(onClick = { PlaybackController.toggleRepeatMode() }, modifier = Modifier.size(48.dp)) {
+                    Icon(imageVector = repeatIcon, contentDescription = "Repeat mode", modifier = Modifier.size(28.dp), tint = repeatTint)
+                }
+
                 // Previous track
                 IconButton(onClick = { PlaybackController.prevTrack() }, modifier = Modifier.size(64.dp)) {
                     Icon(Icons.Filled.ChevronLeft, contentDescription = "Canción anterior", modifier = Modifier.size(48.dp), tint = Color.White)

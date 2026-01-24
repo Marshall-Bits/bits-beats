@@ -8,6 +8,8 @@ import android.provider.MediaStore
 import androidx.core.net.toUri
 import androidx.core.content.edit
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
@@ -21,17 +23,22 @@ import java.io.File
 
 // Central playback controller shared across screens (manages MediaPlayer & observable state)
 object PlaybackController {
+    // Repeat modes
+    enum class RepeatMode { OFF, REPEAT_ALL, REPEAT_ONE }
+    // current repeat mode
+    var repeatMode by mutableStateOf(RepeatMode.OFF)
+
     // current playing track
     var currentUri by mutableStateOf<String?>(null)
     var title by mutableStateOf("Sin canción")
     var artist by mutableStateOf("")
     var isPlaying by mutableStateOf(false)
-    var currentPosition by mutableStateOf(0L)
-    var duration by mutableStateOf(0L)
+    var currentPosition by mutableLongStateOf(0L)
+    var duration by mutableLongStateOf(0L)
 
     // queue management: list of track URIs (strings) and current index
     var queue by mutableStateOf<List<String>>(emptyList())
-    var queueIndex by mutableStateOf(-1)
+    var queueIndex by mutableIntStateOf(-1)
 
     private var mediaPlayer: MediaPlayer? = null
     private var tickerJob: Job? = null
@@ -112,8 +119,21 @@ object PlaybackController {
                 mp.start()
                 // on completion advance to next in queue
                 mp.setOnCompletionListener {
-                    // move to next track automatically
-                    nextTrack()
+                    // handle completion depending on repeat mode
+                    when (repeatMode) {
+                        RepeatMode.REPEAT_ONE -> {
+                            try {
+                                mp.seekTo(0)
+                                mp.start()
+                                isPlaying = true
+                                startTicker()
+                            } catch (_: Exception) {}
+                        }
+                        else -> {
+                            // REPEAT_ALL and OFF delegate to nextTrack which will handle wrapping for REPEAT_ALL
+                            nextTrack()
+                        }
+                    }
                 }
                 startTicker()
             }
@@ -165,14 +185,28 @@ object PlaybackController {
         // If there's no queue, do nothing
         if (queue.isEmpty()) return
 
-        // If there is a next item, advance. Otherwise do nothing.
+        // If there is a next item, advance.
         if (queueIndex + 1 < queue.size) {
             queueIndex += 1
             appContext?.let { saveState(it) }
             playCurrentFromQueue()
-        } else {
-            // no next track: do nothing
             return
+        }
+
+        // Reached end of queue
+        when (repeatMode) {
+            RepeatMode.REPEAT_ALL -> {
+                // wrap to start
+                if (queue.isNotEmpty()) {
+                    queueIndex = 0
+                    appContext?.let { saveState(it) }
+                    playCurrentFromQueue()
+                }
+            }
+            else -> {
+                // OFF: do nothing; REPEAT_ONE handled by onCompletion
+                return
+            }
         }
     }
 
@@ -203,7 +237,7 @@ object PlaybackController {
         queueIndex = -1
         // clear persisted state
         appContext?.let { ctx ->
-            try { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_LAST_STATE).apply() } catch (_: Exception) {}
+            try { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { remove(KEY_LAST_STATE) } } catch (_: Exception) {}
         }
     }
 
@@ -217,6 +251,7 @@ object PlaybackController {
                 put("queueIndex", queueIndex)
                 put("position", currentPosition)
                 put("isPlaying", isPlaying)
+                put("repeatMode", repeatMode.name)
                 put("updatedAt", System.currentTimeMillis())
             }
             prefs.edit { putString(KEY_LAST_STATE, json.toString()) }
@@ -238,6 +273,8 @@ object PlaybackController {
             if (uris.isEmpty()) return
             val idx = json.optInt("queueIndex", 0).coerceIn(0, uris.size - 1)
             val pos = json.optLong("position", 0L)
+            val repeatStr = json.optString("repeatMode", "OFF")
+            repeatMode = try { RepeatMode.valueOf(repeatStr) } catch (_: Exception) { RepeatMode.OFF }
             // val wasPlaying = json.optBoolean("isPlaying", false)
 
             // set state
@@ -247,7 +284,7 @@ object PlaybackController {
 
             // prepare media and position, but DO NOT auto-start playback on app open
             try {
-                val uri = queue[queueIndex].let { it.toUri() }
+                val uri = queue[queueIndex].toUri()
                 // Attempt to read metadata (title/artist/duration) so UI shows correct info on restore
                 try {
                     context.contentResolver.query(uri, arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c ->
@@ -283,5 +320,21 @@ object PlaybackController {
         try { mediaPlayer?.release() } catch (_: Exception) {}
         mediaPlayer = null
         isPlaying = false
+    }
+
+    /** Cycle repeat mode: OFF -> REPEAT_ALL -> REPEAT_ONE -> OFF */
+    fun toggleRepeatMode() {
+        repeatMode = when (repeatMode) {
+            RepeatMode.OFF -> RepeatMode.REPEAT_ALL
+            RepeatMode.REPEAT_ALL -> RepeatMode.REPEAT_ONE
+            RepeatMode.REPEAT_ONE -> RepeatMode.OFF
+        }
+        appContext?.let { saveState(it) }
+    }
+
+    /** Set repeat mode explicitly (renamed to avoid JVM signature clash with generated property setter) */
+    fun applyRepeatMode(mode: RepeatMode) {
+        repeatMode = mode
+        appContext?.let { saveState(it) }
     }
 }
