@@ -47,11 +47,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.example.bitsbeats.AudioFile
+import com.example.bitsbeats.data.MediaRepository.getRecentAudioFiles
 import com.example.bitsbeats.FileItem
 import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.getDirectoryContents
-import com.example.bitsbeats.getRecentAudioFiles
+import com.example.bitsbeats.data.AudioFile
 import com.example.bitsbeats.queryAudioIdFromPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
