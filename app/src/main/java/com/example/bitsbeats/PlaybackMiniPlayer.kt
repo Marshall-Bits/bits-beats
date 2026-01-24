@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.bitsbeats.ui.components.PlaybackController
 
 @Composable
 fun PlaybackMiniPlayer(navController: NavHostController, modifier: Modifier = Modifier) {

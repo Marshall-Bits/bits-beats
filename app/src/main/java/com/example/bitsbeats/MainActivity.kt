@@ -52,6 +52,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.bitsbeats.ui.components.PlaybackController
 import com.example.bitsbeats.ui.theme.BitsBeatsTheme
 import java.io.File
 import com.example.bitsbeats.ui.screens.FileBrowserScreen

@@ -1,8 +1,9 @@
-package com.example.bitsbeats
+package com.example.bitsbeats.ui.components
 
 import android.content.ContentUris
 import android.content.Context
 import android.media.MediaPlayer
+import android.net.Uri
 import android.provider.MediaStore
 import androidx.core.net.toUri
 import androidx.core.content.edit
@@ -15,6 +16,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import kotlinx.coroutines.delay
+import org.json.JSONArray
+import java.io.File
 
 // Central playback controller shared across screens (manages MediaPlayer & observable state)
 object PlaybackController {
@@ -74,7 +77,7 @@ object PlaybackController {
         } catch (_: Exception) {}
     }
 
-    private fun playUri(context: Context, uri: android.net.Uri) {
+    private fun playUri(context: Context, uri: Uri) {
         try {
             appContext = context.applicationContext
             // query metadata
@@ -91,7 +94,7 @@ object PlaybackController {
                 if (title.isBlank() || title == "Sin canción") {
                     try {
                         val path = uri.path
-                        if (!path.isNullOrBlank()) title = java.io.File(path).name
+                        if (!path.isNullOrBlank()) title = File(path).name
                     } catch (_: Exception) {}
                 }
             } catch (_: Exception) {}
@@ -210,7 +213,7 @@ object PlaybackController {
         try {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val json = JSONObject().apply {
-                put("queue", org.json.JSONArray(queue))
+                put("queue", JSONArray(queue))
                 put("queueIndex", queueIndex)
                 put("position", currentPosition)
                 put("isPlaying", isPlaying)

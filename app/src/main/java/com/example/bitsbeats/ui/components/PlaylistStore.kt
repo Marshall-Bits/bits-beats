@@ -1,7 +1,8 @@
-package com.example.bitsbeats
+package com.example.bitsbeats.ui.components
 
 import android.content.Context
 import androidx.core.content.edit
+import org.json.JSONArray
 import org.json.JSONObject
 
 // Playlist storage helpers (simple JSON in SharedPreferences)
@@ -38,7 +39,7 @@ object PlaylistStore {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val root = JSONObject()
         data.forEach { (k, v) ->
-            val arr = org.json.JSONArray()
+            val arr = JSONArray()
             v.forEach { item ->
                 val obj = JSONObject()
                 obj.put("uri", item["uri"] ?: "")

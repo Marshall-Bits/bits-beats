@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.bitsbeats.AudioFile
 import com.example.bitsbeats.FileItem
-import com.example.bitsbeats.PlaylistStore
+import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.getDirectoryContents
 import com.example.bitsbeats.getRecentAudioFiles
 import com.example.bitsbeats.queryAudioIdFromPath

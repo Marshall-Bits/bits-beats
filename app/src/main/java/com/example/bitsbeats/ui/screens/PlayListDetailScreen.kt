@@ -33,8 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.bitsbeats.PlaybackController
-import com.example.bitsbeats.PlaylistStore
+import com.example.bitsbeats.ui.components.PlaybackController
+import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.formatDuration
 
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
