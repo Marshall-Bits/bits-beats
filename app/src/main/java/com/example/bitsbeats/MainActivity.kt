@@ -1,9 +1,6 @@
 package com.example.bitsbeats
 
-import android.annotation.SuppressLint
-import android.content.ContentResolver
 import android.os.Bundle
-import android.provider.MediaStore
 import java.net.URLEncoder
 import java.net.URLDecoder
 import androidx.activity.ComponentActivity
