@@ -128,18 +128,29 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        composable("playlistDetail/{name}") { backStackEntry ->
-                            val encoded = backStackEntry.arguments?.getString("name") ?: ""
-                            val name = try {
+                        // Route without parameter: opens playlists list (used when no active playlist is set)
+                        composable("playlistDetail") {
+                            PlaylistScreen(
+                                onNavigateToPlaylistDetail = { name ->
+                                    val enc = URLEncoder.encode(name, "UTF-8")
+                                    navController.navigate("playlistDetail/$enc")
+                                },
+                                onCreatePlaylist = {}
+                            )
+                        }
+
+                        composable("playlistDetail/{id}") { backStackEntry ->
+                            val encoded = backStackEntry.arguments?.getString("id") ?: ""
+                            val id = try {
                                 URLDecoder.decode(encoded, "UTF-8")
                             } catch (_: Exception) {
                                 encoded
                             }
                             PlaylistDetailScreen(
-                                playlistName = name,
+                                playlistName = id,
                                 onBack = { navController.popBackStack() },
                                 onAddSongs = {
-                                    val enc = URLEncoder.encode(name, "UTF-8")
+                                    val enc = URLEncoder.encode(id, "UTF-8")
                                     navController.navigate("filebrowser/$enc")
                                 }
                             )
@@ -243,7 +254,19 @@ class MainActivity : ComponentActivity() {
                             // Playlists
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { navController.navigate("playlist") }) {
+                                modifier = Modifier.clickable {
+                                    val active = PlaybackController.activePlaylistName
+                                    if (!active.isNullOrBlank()) {
+                                        try {
+                                            val enc = URLEncoder.encode(active, "UTF-8")
+                                            navController.navigate("playlistDetail/$enc")
+                                        } catch (_: Exception) {
+                                            navController.navigate("playlist")
+                                        }
+                                    } else {
+                                        navController.navigate("playlistDetail")
+                                    }
+                                }) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                                     contentDescription = "Playlists",

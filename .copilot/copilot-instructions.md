@@ -56,6 +56,45 @@ Checklist (qué incluye este archivo)
 - Guardar la `queue` como JSON (array de objetos {uri,title,artist,duration}) en DataStore o en un fichero en app files. Evitar SharedPreferences por migración.
 - On app start: restaurar estado (sin auto-play). Mostrar mini-player en pausa con la información restaurada.
 
+Nota importante (playlist activa)
+- Cuando la reproducción proviene de una "playlist" (es decir, el usuario pulsa PLAY en una playlist), el sistema debe almacenar el nombre de la playlist activa en el estado del reproductor. Esto permite que la UI (mini-player, PlayerScreen y la navegación inferior) sepan qué playlist está en curso y puedan navegar directamente a sus detalles.
+
+Recomendación de implementación rápida (Kotlin)
+- En el controlador de reproducción (ej. `PlaybackController`) añadir un campo observable:
+
+```kotlin
+// en PlaybackController
+var activePlaylistName by mutableStateOf<String?>(null)
+```
+
+- Exponer un parámetro opcional en la función que inicia la reproducción de una lista para registrar el nombre de la playlist:
+
+```kotlin
+fun playQueue(context: Context, uris: List<String>, startIndex: Int = 0, playlistName: String? = null) {
+    if (uris.isEmpty()) return
+    // ... construir cola / shuffle ...
+    activePlaylistName = playlistName
+    // persistir estado && reproducir
+}
+```
+
+- Persistir `activePlaylistName` junto con las demás propiedades en `saveState()` y restaurarla en `restoreState()` (JSON pref de `last_playback_state`). Esto asegura que al reabrir la app el nombre de la playlist activa (y por tanto la navegación) se mantiene.
+
+Ejemplo de JSON (clave `last_playback_state` en SharedPreferences o DataStore):
+
+```json
+{
+  "queue": ["content://...", ...],
+  "queueIndex": 0,
+  "position": 12345,
+  "isPlaying": false,
+  "repeatMode": "OFF",
+  "shuffleEnabled": false,
+  "activePlaylistName": "Mis favoritos",
+  "updatedAt": 167...
+}
+```
+
 6) Permisos y MediaStore (Android 13+)
 - Android 13 (API 33) introdujo permisos granulares: `READ_MEDIA_AUDIO`.
 - Compatibilidad: en tiempo de ejecución pedir `READ_MEDIA_AUDIO` en API>=33, en API <33 pedir `READ_EXTERNAL_STORAGE`.
@@ -112,6 +151,35 @@ APIs a evitar / obsoletas / notas
 - Media access: MediaStore queries (getRecentAudioFiles, queryAudioIdFromPath)
 - Playback: `PlaybackController` (implementación propia, usa MediaPlayer internamente actualmente)
 - Playlists: JSON en SharedPreferences (PlaylistStore)
+
+Comportamiento del botón Playlists en la navegación inferior
+- Especificación: el icono/entrada "Playlists" del bottom navigation debe comportarse así:
+  - Si existe una playlist activa (`PlaybackController.activePlaylistName` no es null/blank): navegar directamente a `PlaylistDetailScreen` de esa playlist (ruta `playlistDetail/{name}` codificada con URLEncoder).
+  - En caso contrario: navegar a la pantalla de listado de playlists (`PlaylistScreen`).
+
+Implementación sugerida (fragmento en `MainActivity` al pulsar el botón):
+
+```kotlin
+val active = PlaybackController.activePlaylistName
+if (!active.isNullOrBlank()) {
+    val enc = URLEncoder.encode(active, "UTF-8")
+    navController.navigate("playlistDetail/$enc")
+} else {
+    navController.navigate("playlist")
+}
+```
+
+Notas operativas
+- Asegúrate de que todas las partes de la app que inician la reproducción desde una playlist (por ejemplo `PlaylistDetailScreen`) llamen a `playQueue(..., playlistName = name)` en vez de solo `playQueue(...)`. Si no se pasa `playlistName`, la app no podrá saber cuál es la playlist activa.
+- Ten en cuenta que `activePlaylistName` es sólo un puntero nominal: la información real de la playlist (lista de URIs) debe seguir guardándose en `PlaylistStore` y/o en la `queue` persistida.
+- Para un comportamiento robusto, cuando se elimine o renombre una playlist, actualiza `activePlaylistName` si apunta a la playlist afectada (por ejemplo, clear o reemplazar el nombre).
+
+Testing rápido
+- Escenario 1 (hay playlist activa): reproducir desde `PlaylistDetailScreen` pasando `playlistName` → al pulsar el icono Playlists debe abrir `PlaylistDetailScreen` para esa playlist.
+- Escenario 2 (sin playlist activa): pulsar Playlists debe abrir la lista de playlists.
+
+Migración recomendada
+- A medio plazo, migrar la persistencia de `last_playback_state` a DataStore (preferences) y mantener `activePlaylistName` en la misma estructura para integridad y consistencia.
 
 12) Migraciones y tareas prioritarias (roadmap)
 - Corto plazo (prioridad alta):
@@ -173,4 +241,3 @@ fun PlayerScreen(state: PlayerUiState, onPlay: ()->Unit, onSeek: (Int)->Unit) {
 ---
 
 Archivo actualizado: inclúyelo en el repo y úsalo como referencia viva; actualiza cuando migréis a ExoPlayer / DataStore o añadáis DI.
-

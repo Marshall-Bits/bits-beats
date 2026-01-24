@@ -56,7 +56,7 @@ fun PlaylistDetailScreen(playlistName: String, onBack: () -> Unit = {}, onAddSon
         try {
             val uris = items.map { it["uri"] as? String ?: "" }.filter { it.isNotBlank() }
             if (uris.isEmpty()) return
-            PlaybackController.playQueue(context, uris, index)
+            PlaybackController.playQueue(context, uris, index, playlistName = playlistName)
         } catch (e: Exception) {
             Toast.makeText(context, "No se pudo reproducir: ${e.message}", Toast.LENGTH_SHORT).show()
         }

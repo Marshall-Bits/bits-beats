@@ -28,6 +28,9 @@ object PlaybackController {
     // current repeat mode
     var repeatMode by mutableStateOf(RepeatMode.OFF)
 
+    // active playlist name (nullable) — set when playing a named playlist
+    var activePlaylistName by mutableStateOf<String?>(null)
+
     // current playing track
     var currentUri by mutableStateOf<String?>(null)
     var title by mutableStateOf("Sin canción")
@@ -49,7 +52,7 @@ object PlaybackController {
     private const val KEY_LAST_STATE = "last_playback_state"
 
     /** Play a list of URIs as a queue starting at [startIndex]. This replaces any existing queue. */
-    fun playQueue(context: Context, uris: List<String>, startIndex: Int = 0) {
+    fun playQueue(context: Context, uris: List<String>, startIndex: Int = 0, playlistName: String? = null) {
         if (uris.isEmpty()) return
         // If shuffle is enabled, build a shuffled queue keeping the selected item first
         if (shuffleEnabled) {
@@ -61,6 +64,8 @@ object PlaybackController {
             queue = uris
             queueIndex = startIndex.coerceIn(0, uris.size - 1)
         }
+        // remember the optional playlist name for UI/navigation
+        activePlaylistName = playlistName
         appContext = context.applicationContext
         saveState(context) // persist queue immediately
         playCurrentFromQueue()
@@ -261,6 +266,7 @@ object PlaybackController {
                 put("isPlaying", isPlaying)
                 put("repeatMode", repeatMode.name)
                 put("shuffleEnabled", shuffleEnabled)
+                put("activePlaylistName", activePlaylistName ?: "")
                 put("updatedAt", System.currentTimeMillis())
             }
             prefs.edit { putString(KEY_LAST_STATE, json.toString()) }
@@ -285,6 +291,7 @@ object PlaybackController {
             val repeatStr = json.optString("repeatMode", "OFF")
             repeatMode = try { RepeatMode.valueOf(repeatStr) } catch (_: Exception) { RepeatMode.OFF }
             shuffleEnabled = json.optBoolean("shuffleEnabled", false)
+            activePlaylistName = json.optString("activePlaylistName", "").takeIf { it.isNotBlank() }
 
             // set state
             queue = uris
