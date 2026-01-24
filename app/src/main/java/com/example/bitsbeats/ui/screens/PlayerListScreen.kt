@@ -46,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.net.toUri
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,6 +56,7 @@ import com.example.bitsbeats.R
 import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.ui.components.PlaybackController
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.produceState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("UNUSED_PARAMETER")
@@ -82,7 +85,7 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
             Text(text = "Mis Playlists", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(16.dp))
 
             Button(onClick = { showingDialog = true }, modifier = Modifier.padding(8.dp)) {
-                Icon(imageVector = Icons.Filled.Add, contentDescription = "Nueva playlist", modifier = Modifier.size(20.dp))
+                Icon(imageVector = Icons.Filled.Add, contentDescription = "Nueva playlist", modifier = Modifier.size(20.dp), tint = Color.White)
                 Spacer(modifier = Modifier.size(8.dp))
                 Text("New Playlist")
             }
@@ -112,14 +115,40 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                                 .fillMaxWidth()
                                 .background(Color(0xFF1E1E1E))
                             , horizontalAlignment = Alignment.CenterHorizontally) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.playlist_default),
-                                    contentDescription = "Playlist artwork",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(110.dp),
-                                    contentScale = ContentScale.Crop
-                                )
+                                // load artwork URI for this playlist; if exists, load bitmap async, otherwise show default
+                                val artworkUri = PlaylistStore.getPlaylistImage(context, name)
+                                val artworkBitmap = produceState(initialValue = null as androidx.compose.ui.graphics.ImageBitmap?, artworkUri) {
+                                    value = null
+                                    if (!artworkUri.isNullOrBlank()) {
+                                        try {
+                                            val u = artworkUri.toUri()
+                                            context.contentResolver.openInputStream(u)?.use { stream ->
+                                                val bmp = android.graphics.BitmapFactory.decodeStream(stream)
+                                                value = bmp?.asImageBitmap()
+                                            }
+                                        } catch (_: Exception) { value = null }
+                                    }
+                                }
+
+                                if (artworkBitmap.value != null) {
+                                    Image(
+                                        bitmap = artworkBitmap.value!!,
+                                        contentDescription = "Playlist artwork",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(110.dp),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.playlist_default),
+                                        contentDescription = "Playlist artwork",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(110.dp),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -128,12 +157,12 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
 
                                     Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
                                         IconButton(onClick = { menuFor = if (menuFor == name) null else name }) {
-                                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones", tint = Color.LightGray)
+                                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones", tint = Color.White)
                                         }
 
                                         DropdownMenu(expanded = (menuFor == name), onDismissRequest = { menuFor = null }) {
-                                            DropdownMenuItem(text = { Text("Edit name") }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }, onClick = { editingName = name; editText = name; menuFor = null })
-                                            DropdownMenuItem(text = { Text("Delete playlist") }, leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) }, onClick = { playlistToDelete = name; menuFor = null })
+                                            DropdownMenuItem(text = { Text("Edit name") }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null, tint = Color.White) }, onClick = { editingName = name; editText = name; menuFor = null })
+                                            DropdownMenuItem(text = { Text("Delete playlist") }, leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = Color.White) }, onClick = { playlistToDelete = name; menuFor = null })
                                         }
                                     }
                                 }

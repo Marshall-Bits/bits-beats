@@ -225,10 +225,58 @@ imageLauncher.launch(arrayOf("image/*"))
   - Mostrar la imagen en la cabecera (alto ~180dp). El overflow menu debe cerrar automáticamente al escoger una acción.
   - Tras renombrar o borrar, navegar a la lista de playlists para evitar mostrar pantalla de detalle inexistente.
 
--- Testing
-  - Test manual: elegir imagen desde Files app, cerrar app, reabrir y comprobar que la imagen sigue mostrando (permiso persistente + URI guardada).
-  - Test de borrado: reproducir una playlist con nombre X, borrar X, comprobar `PlaybackController` quedó vacío y que la UI navegó a la lista.
+-- Playlist artwork synchronization (NEW requirement)
+  - Requisito funcional:
+    - La imagen que se muestra en `PlaylistDetailScreen` para una playlist debe ser exactamente la misma que aparece en la tarjeta de esa playlist en `PlayerListScreen`.
+    - Si una playlist tiene una imagen almacenada, no debe mostrarse la imagen por defecto (`R.drawable.playlist_default`) en ninguna parte de la UI (ni en detalle ni en el listado).
 
----
+  - Flujo recomendado de datos / responsabilidades:
+    1. `PlaylistStore` es la única fuente de verdad para la URI de la imagen de cada playlist. Debe exponer claramente:
+       - `fun setPlaylistImage(context: Context, name: String, uri: String)`
+       - `fun getPlaylistImage(context: Context, name: String): String?`
+       - `fun deletePlaylist(...)` y `fun renamePlaylist(...)` deben mover/limpiar la entrada de imagen apropiadamente.
+    2. `PlaylistDetailScreen`:
+       - Cuando el usuario añade/actualiza la imagen (SAF), llama `PlaylistStore.setPlaylistImage(...)` y actualiza su estado local `currentArtworkUri`.
+       - Además, notifica a la UI de listado que actualice (ver opciones abajo).
+    3. `PlayerListScreen` (lista de playlists):
+       - Al componer cada tarjeta, en lugar de mostrar directamente `painterResource(R.drawable.playlist_default)`, consulta `PlaylistStore.getPlaylistImage(context, name)`:
+         - Si devuelve una URI no nula y válida, cargar la imagen desde esa URI y mostrarla.
+         - Si devuelve null o la carga falla, usar `R.drawable.playlist_default`.
+       - Evitar mantener una copia local desincronizada de las URIs: recarga el valor (o observa una fuente de verdad) cuando se actualice una playlist.
 
-Archivo actualizado: inclúyelo en el repo y úsalo como referencia viva; actualiza cuando migréis a ExoPlayer / DataStore o añadáis DI.
+  - Estrategias para actualizar la UI de listado cuando cambia la imagen:
+    - Opciones (de más a menos recomendadas):
+      A) Centralizar el estado de playlists en un ViewModel / StateFlow: `PlaylistsViewModel` expone la lista con metadatos (nombre, imageUri) y emite actualizaciones cuando `PlaylistStore` cambia. `PlaylistDetailScreen` al actualizar la imagen invoca el ViewModel para refrescar o el ViewModel escucha cambios en `PlaylistStore`.
+      B) Emitir un resultado al volver de `PlaylistDetailScreen`: al hacer pop/navegar atrás, pasar un resultado (o usar `navController.previousBackStackEntry?.savedStateHandle`) para informar a `PlaylistScreen` de que recargue la lista.
+      C) Como parche rápido y simple: después de `PlaylistStore.setPlaylistImage(...)` actualizar manualmente la lista en `PlayerListScreen` (p. ej. recargando `playlists = PlaylistStore.loadAll(context).keys.toList()` dentro de una effect/refresh callback).
+
+  - Ejemplo de renderizado seguro en `PlayerListScreen` (pseudocódigo / idea):
+    - En la lambda que genera cada tarjeta:
+      - val imageUri = PlaylistStore.getPlaylistImage(context, name)
+      - if (!imageUri.isNullOrBlank()) {
+          // cargar de forma asincrónica con produceState/remember o usar Coil (AsyncImage)
+          // show Image(bitmap = loadedBitmap)
+        } else {
+          Image(painter = painterResource(R.drawable.playlist_default), ...)
+        }
+
+  - Nota sobre rendimiento y librerías:
+    - Cargar muchas imágenes mediante `BitmapFactory.decodeStream` en el hilo UI puede ser costoso. Para listas con muchas tarjetas, se recomienda usar una librería de carga de imágenes (Coil + coil-compose) que cachea y gestiona el threading:
+      - Dependencia sugerida: `io.coil-kt:coil-compose` (si decides añadir dependencias en el futuro).
+    - Si prefieres no añadir dependencias, usa `produceState` o `remember` para cargar `Bitmap` en un background thread y luego convertir a `ImageBitmap` con `asImageBitmap()`.
+
+  - Comportamiento al renombrar/borrar playlists:
+    - `renamePlaylist` debe mover la entrada de imagen (si existe) al nuevo nombre.
+    - `deletePlaylist` debe eliminar la entrada de imagen asociada.
+    - Si se está reproduciendo la playlist que se borra, limpiar el reproductor con `PlaybackController.clearPlaybackAndReset()` (ya documentado).
+
+  - Pruebas manuales recomendadas:
+    - Crear una playlist, añadir una imagen via `PlaylistDetailScreen`, volver al listado y comprobar que la miniatura de la tarjeta muestra la imagen nueva (no la default).
+    - Cerrar y volver a abrir la app: comprobar que la imagen persiste (permiso persistente + URI guardada).
+    - Renombrar la playlist: comprobar que la tarjeta en el listado mantiene la imagen tras el renombrado.
+    - Borrar la playlist: comprobar que la imagen se elimina y que el reproductor queda vacío si era la activa.
+
+  - Notas de migración (si usas DataStore en el futuro):
+    - Si migras `PlaylistStore` a DataStore, expón un Flow<Map<String, PlaylistMeta>> que `PlaylistsViewModel` pueda observar y mapear a UI State. Esto hace la sincronización trivial.
+
+*** End Patch

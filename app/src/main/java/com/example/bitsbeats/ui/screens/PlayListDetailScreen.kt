@@ -23,6 +23,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -76,10 +79,20 @@ fun PlaylistDetailScreen(
     val playbackIsPlaying = PlaybackController.isPlaying
 
     // artwork URI state (so we can update after picking an image)
-    var currentArtworkUri by remember { mutableStateOf(PlaylistStore.getPlaylistImage(context, playlistName)) }
+    var currentArtworkUri by remember {
+        mutableStateOf(
+            PlaylistStore.getPlaylistImage(
+                context,
+                playlistName
+            )
+        )
+    }
 
     // load artwork URI and bitmap
-    val artworkBitmap = produceState(initialValue = null as androidx.compose.ui.graphics.ImageBitmap?, currentArtworkUri) {
+    val artworkBitmap = produceState(
+        initialValue = null as androidx.compose.ui.graphics.ImageBitmap?,
+        currentArtworkUri
+    ) {
         value = null
         if (!currentArtworkUri.isNullOrBlank()) {
             try {
@@ -88,7 +101,9 @@ fun PlaylistDetailScreen(
                     val bmp = BitmapFactory.decodeStream(stream)
                     value = bmp?.asImageBitmap()
                 }
-            } catch (_: Exception) { value = null }
+            } catch (_: Exception) {
+                value = null
+            }
         }
     }
 
@@ -103,39 +118,94 @@ fun PlaylistDetailScreen(
             if (uris.isEmpty()) return
             PlaybackController.playQueue(context, uris, index, playlistName = playlistName)
         } catch (e: Exception) {
-            Toast.makeText(context, "No se pudo reproducir: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "No se pudo reproducir: ${e.message}", Toast.LENGTH_SHORT)
+                .show()
         }
     }
 
     // launcher to pick image from device
-    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        uri?.let {
-            try {
-                // persist permission
-                context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: Exception) {}
-            PlaylistStore.setPlaylistImage(context, playlistName, it.toString())
-            currentArtworkUri = it.toString()
+    val imageLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            uri?.let {
+                try {
+                    // persist permission
+                    context.contentResolver.takePersistableUriPermission(
+                        it,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: Exception) {
+                }
+                PlaylistStore.setPlaylistImage(context, playlistName, it.toString())
+                currentArtworkUri = it.toString()
+            }
         }
-    }
 
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color.DarkGray)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .statusBarsPadding()
+        .background(Color.DarkGray)) {
         TopAppBar(
             title = { Text(text = playlistName, color = Color.White) },
-            navigationIcon = { IconButton(onClick = { onBackToList() }) { Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White) } },
+            navigationIcon = {
+                IconButton(onClick = { onBackToList() }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Atrás",
+                        tint = Color.White
+                    )
+                }
+            },
             actions = {
-                IconButton(onClick = { menuExpanded = true }) { Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones", tint = Color.White) }
+                IconButton(onClick = {
+                    menuExpanded = true
+                }) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "Opciones",
+                        tint = Color.White
+                    )
+                }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(text = { Text("Edit name") }, onClick = { menuExpanded = false; showRenameDialog = true })
-                    DropdownMenuItem(text = { Text("Delete playlist") }, onClick = {
-                        menuExpanded = false
-                        showDeleteConfirm = true
-                    })
-                    DropdownMenuItem(text = { Text("Add image") }, onClick = {
-                        menuExpanded = false
-                        // open SAF image picker; filter images
-                        imageLauncher.launch(arrayOf("image/*"))
-                    })
+                    DropdownMenuItem(
+                        text = { Text("Edit name") },
+                        onClick = { menuExpanded = false; showRenameDialog = true },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = "Edit name",
+                                tint = Color.White
+                            )
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete playlist") },
+                        onClick = {
+                            menuExpanded = false
+                            showDeleteConfirm = true
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = "Delete playlist",
+                                tint = Color.White
+                            )
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Modify image") },
+                        onClick = {
+                            menuExpanded = false
+                            // open SAF image picker; filter images
+                            imageLauncher.launch(arrayOf("image/*"))
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Image,
+                                contentDescription = "Modify image",
+                                tint = Color.White
+                            )
+                        }
+                    )
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D))
@@ -143,10 +213,24 @@ fun PlaylistDetailScreen(
 
         // header artwork
         if (artworkBitmap.value != null) {
-            Image(bitmap = artworkBitmap.value!!, contentDescription = "Artwork", modifier = Modifier.fillMaxWidth().height(180.dp), contentScale = ContentScale.Crop)
+            Image(
+                bitmap = artworkBitmap.value!!,
+                contentDescription = "Artwork",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                contentScale = ContentScale.Crop
+            )
         } else {
             // fallback: default drawable
-            Image(painter = painterResource(id = R.drawable.playlist_default), contentDescription = "Artwork default", modifier = Modifier.fillMaxWidth().height(180.dp), contentScale = ContentScale.Crop)
+            Image(
+                painter = painterResource(id = R.drawable.playlist_default),
+                contentDescription = "Artwork default",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                contentScale = ContentScale.Crop
+            )
         }
 
         // Rename dialog
@@ -155,7 +239,10 @@ fun PlaylistDetailScreen(
                 onDismissRequest = { showRenameDialog = false },
                 title = { Text("Editar nombre") },
                 text = {
-                    TextField(value = renameText, onValueChange = { renameText = it }, placeholder = { Text("Nuevo nombre") })
+                    TextField(
+                        value = renameText,
+                        onValueChange = { renameText = it },
+                        placeholder = { Text("Nuevo nombre") })
                 },
                 confirmButton = {
                     Button(onClick = {
@@ -163,17 +250,26 @@ fun PlaylistDetailScreen(
                         if (newN.isNotBlank()) {
                             val ok = PlaylistStore.renamePlaylist(context, playlistName, newN)
                             if (ok) {
-                                Toast.makeText(context, "Renombrada a '$newN'", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Renombrada a '$newN'", Toast.LENGTH_SHORT)
+                                    .show()
                                 showRenameDialog = false
                                 // navigate back to list so user can open the renamed playlist
                                 onBackToList()
                             } else {
-                                Toast.makeText(context, "No se pudo renombrar (ya existe o error)", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    "No se pudo renombrar (ya existe o error)",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         }
                     }) { Text("Guardar") }
                 },
-                dismissButton = { Button(onClick = { showRenameDialog = false }) { Text("Cancelar") } }
+                dismissButton = {
+                    Button(onClick = {
+                        showRenameDialog = false
+                    }) { Text("Cancelar") }
+                }
             )
         }
 
@@ -194,18 +290,32 @@ fun PlaylistDetailScreen(
                             showDeleteConfirm = false
                             onBackToList()
                         } catch (e: Exception) {
-                            Toast.makeText(context, "No se pudo eliminar la playlist", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                "No se pudo eliminar la playlist",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     }) { Text("Eliminar") }
                 },
-                dismissButton = { Button(onClick = { showDeleteConfirm = false }) { Text("Cancelar") } }
+                dismissButton = {
+                    Button(onClick = {
+                        showDeleteConfirm = false
+                    }) { Text("Cancelar") }
+                }
             )
         }
 
-        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             Button(onClick = {
-                if (items.isNotEmpty()) { playIndex(0) }
-                else PlaybackController.togglePlayPause()
+                if (items.isNotEmpty()) {
+                    playIndex(0)
+                } else PlaybackController.togglePlayPause()
             }, enabled = items.isNotEmpty()) {
                 Text(if (playbackIsPlaying) "PAUSE" else "PLAY")
             }
@@ -213,16 +323,36 @@ fun PlaylistDetailScreen(
         }
 
         if (items.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay canciones en esta playlist", color = Color.White) }
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) { Text("No hay canciones en esta playlist", color = Color.White) }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            LazyColumn(modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp)) {
                 items(items.withIndex().toList()) { (idx, item) ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(8.dp).clickable { playIndex(idx) }, verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .clickable { playIndex(idx) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = item["title"] as? String ?: "Desconocido", color = Color.White)
-                            Text(text = item["artist"] as? String ?: "Artista desconocido", color = Color.LightGray)
+                            Text(
+                                text = item["title"] as? String ?: "Desconocido",
+                                color = Color.White
+                            )
+                            Text(
+                                text = item["artist"] as? String ?: "Artista desconocido",
+                                color = Color.LightGray
+                            )
                         }
-                        Text(text = formatDuration((item["duration"] as? Long) ?: 0L), color = Color.LightGray)
+                        Text(
+                            text = formatDuration((item["duration"] as? Long) ?: 0L),
+                            color = Color.LightGray
+                        )
                     }
                 }
             }
