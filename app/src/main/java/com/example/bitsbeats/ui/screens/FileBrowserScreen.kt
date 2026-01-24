@@ -154,11 +154,21 @@ fun FileBrowserScreen(
             navigationIcon = {
                 IconButton(onClick = {
                     if (showFileBrowser) {
-                        val parentPath = File(currentPath).parent
-                        if (parentPath != null && parentPath.startsWith(Environment.getExternalStorageDirectory().absolutePath)) {
-                            currentPath = parentPath
-                        } else {
+                        // Determine the active root (SD card when current path is on SD, otherwise primary)
+                        val primaryRoot = Environment.getExternalStorageDirectory().absolutePath
+                        val activeRoot = sdCardRoot?.takeIf { currentPath.startsWith(it) } ?: primaryRoot
+
+                        // If we're at the active root, go back to recent songs; otherwise go one directory up
+                        if (currentPath == activeRoot) {
                             showFileBrowser = false
+                        } else {
+                            val parentPath = File(currentPath).parent
+                            if (parentPath != null && parentPath.startsWith(activeRoot)) {
+                                currentPath = parentPath
+                            } else {
+                                // fallback: jump to active root
+                                currentPath = activeRoot
+                            }
                         }
                     } else {
                         onNavigateBack()
@@ -185,7 +195,11 @@ fun FileBrowserScreen(
                         )
                     }
                 }
-                IconButton(onClick = { showFileBrowser = !showFileBrowser }) {
+                // Folder icon: always open the primary system storage root and show file browser
+                IconButton(onClick = {
+                    showFileBrowser = true
+                    currentPath = Environment.getExternalStorageDirectory().absolutePath
+                }) {
                     Icon(
                         imageVector = Icons.Filled.Folder,
                         contentDescription = "Explorar",
