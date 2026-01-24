@@ -48,8 +48,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.bitsbeats.ui.components.PlaybackController
+import com.example.bitsbeats.ui.components.PlaybackMiniPlayer
 import com.example.bitsbeats.ui.theme.BitsBeatsTheme
-import java.io.File
 import com.example.bitsbeats.ui.screens.FileBrowserScreen
 import com.example.bitsbeats.ui.screens.HomeScreen
 import com.example.bitsbeats.ui.screens.PlayerScreen
