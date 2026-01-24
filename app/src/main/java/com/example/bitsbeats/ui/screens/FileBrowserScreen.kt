@@ -31,7 +31,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -83,6 +85,12 @@ fun FileBrowserScreen(
     var hasPermission by remember { mutableStateOf(false) }
     // detected removable SD card root path (null when not found)
     var sdCardRoot by remember { mutableStateOf<String?>(null) }
+
+    // UI + state for "add all" feature
+    var showAddAllDialog by remember { mutableStateOf(false) }
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var newPlaylistName by remember { mutableStateOf("") }
+    var playlists by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // cache mapping from file path -> MediaStore audio id (nullable)
     val pathToId = remember { mutableStateMapOf<String, Long?>() }
@@ -205,6 +213,16 @@ fun FileBrowserScreen(
                         contentDescription = "Explorar",
                         tint = Color(0xFFFFD54F)
                     )
+                }
+                // "Añadir todo" icon: only visible when browsing and current directory has audio files
+                if (showFileBrowser && files.any { it.isAudio }) {
+                    IconButton(onClick = {
+                        // load playlists when opening dialog
+                        playlists = PlaylistStore.loadAll(context).keys.toList()
+                        showAddAllDialog = true
+                    }) {
+                        Icon(imageVector = Icons.Filled.Add, contentDescription = "Añadir todo", tint = Color.White)
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D))
@@ -424,6 +442,130 @@ fun FileBrowserScreen(
                     Spacer(modifier = Modifier.height(200.dp))
                 }
             }
+        }
+
+        // Add-all dialog: choose existing playlist or create new
+        if (showAddAllDialog) {
+            AlertDialog(
+                onDismissRequest = { showAddAllDialog = false },
+                title = { Text("Añadir todas las canciones") },
+                text = {
+                    if (playlists.isEmpty()) {
+                        Column {
+                            Text("No tienes playlists. Puedes crear una nueva:")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(onClick = { showCreatePlaylistDialog = true }) { Text("Crear nueva playlist") }
+                        }
+                    } else {
+                        Column {
+                            Text("Selecciona una playlist:")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // simple vertical list of buttons to pick playlist
+                            playlists.forEach { p ->
+                                Button(onClick = {
+                                    // add all audio files in current directory to playlist p
+                                    val toAdd = files.filter { it.isAudio }
+                                    toAdd.forEach { f ->
+                                        try {
+                                            val resolvedId = pathToId[f.path]
+                                            val uri = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(f.path)).toString()
+                                            var title = File(f.path).name
+                                            var artist = ""
+                                            var duration = 0L
+                                            if (resolvedId != null) {
+                                                try {
+                                                    context.contentResolver.query(
+                                                        ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId),
+                                                        arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION),
+                                                        null,
+                                                        null,
+                                                        null
+                                                    )?.use { c ->
+                                                        if (c.moveToFirst()) {
+                                                            title = c.getString(0) ?: title
+                                                            artist = c.getString(1) ?: ""
+                                                            duration = c.getLong(2)
+                                                        }
+                                                    }
+                                                } catch (_: Exception) {}
+                                            }
+                                            PlaylistStore.addItemToPlaylist(context, p, uri, title, artist, duration)
+                                        } catch (_: Exception) {}
+                                    }
+                                    Toast.makeText(context, "Añadidas ${toAdd.size} canciones a '$p'", Toast.LENGTH_SHORT).show()
+                                    showAddAllDialog = false
+                                }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Text(p) }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(onClick = { showCreatePlaylistDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Crear nueva playlist") }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { showAddAllDialog = false }) { Text("Cerrar") }
+                }
+            )
+        }
+
+        // Create playlist dialog (when adding all and user wants to make a new playlist first)
+        if (showCreatePlaylistDialog) {
+            AlertDialog(
+                onDismissRequest = { showCreatePlaylistDialog = false },
+                title = { Text("Nombre de la playlist") },
+                text = {
+                    Column {
+                        TextField(value = newPlaylistName, onValueChange = { newPlaylistName = it }, placeholder = { Text("Nombre") })
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val name = newPlaylistName.trim()
+                        if (name.isNotBlank()) {
+                            val ok = PlaylistStore.createPlaylist(context, name)
+                            if (ok) {
+                                // add all now
+                                val toAdd = files.filter { it.isAudio }
+                                toAdd.forEach { f ->
+                                    try {
+                                        val resolvedId = pathToId[f.path]
+                                        val uri = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(f.path)).toString()
+                                        var title = File(f.path).name
+                                        var artist = ""
+                                        var duration = 0L
+                                        if (resolvedId != null) {
+                                            try {
+                                                context.contentResolver.query(
+                                                    ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId),
+                                                    arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION),
+                                                    null,
+                                                    null,
+                                                    null
+                                                )?.use { c ->
+                                                    if (c.moveToFirst()) {
+                                                        title = c.getString(0) ?: title
+                                                        artist = c.getString(1) ?: ""
+                                                        duration = c.getLong(2)
+                                                    }
+                                                }
+                                            } catch (_: Exception) {}
+                                        }
+                                        PlaylistStore.addItemToPlaylist(context, name, uri, title, artist, duration)
+                                    } catch (_: Exception) {}
+                                }
+                                Toast.makeText(context, "Añadidas ${toAdd.size} canciones a '$name'", Toast.LENGTH_SHORT).show()
+                                showCreatePlaylistDialog = false
+                                showAddAllDialog = false
+                                newPlaylistName = ""
+                            } else {
+                                Toast.makeText(context, "Ya existe una playlist con ese nombre", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }) { Text("Crear y añadir") }
+                },
+                dismissButton = {
+                    Button(onClick = { showCreatePlaylistDialog = false }) { Text("Cancelar") }
+                }
+            )
         }
     }
 }
