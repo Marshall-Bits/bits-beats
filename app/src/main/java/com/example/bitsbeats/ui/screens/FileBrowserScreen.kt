@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -80,6 +81,8 @@ fun FileBrowserScreen(
     var files by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     var audioFiles by remember { mutableStateOf<List<AudioFile>>(emptyList()) }
     var hasPermission by remember { mutableStateOf(false) }
+    // detected removable SD card root path (null when not found)
+    var sdCardRoot by remember { mutableStateOf<String?>(null) }
 
     // cache mapping from file path -> MediaStore audio id (nullable)
     val pathToId = remember { mutableStateMapOf<String, Long?>() }
@@ -105,6 +108,19 @@ fun FileBrowserScreen(
         if (hasPermission) {
             audioFiles = getRecentAudioFiles(context.contentResolver)
             files = getDirectoryContents(currentPath)
+            // try to detect a removable SD card root by checking external files dirs
+            try {
+                val dirs = context.getExternalFilesDirs(null)
+                val primary = Environment.getExternalStorageDirectory().absolutePath
+                dirs?.forEach { d ->
+                    if (d == null) return@forEach
+                    val root = d.absolutePath.substringBefore("/Android")
+                    if (root.isNotBlank() && root != primary) {
+                        sdCardRoot = root
+                        return@forEach
+                    }
+                }
+            } catch (_: Exception) { /* ignore */ }
         }
     }
 
@@ -156,6 +172,19 @@ fun FileBrowserScreen(
                 }
             },
             actions = {
+                // SD card quick navigation (only shown when detected)
+                if (sdCardRoot != null) {
+                    IconButton(onClick = {
+                        showFileBrowser = true
+                        currentPath = sdCardRoot ?: currentPath
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.SdCard,
+                            contentDescription = "SD Card",
+                            tint = Color(0xFFFFD54F)
+                        )
+                    }
+                }
                 IconButton(onClick = { showFileBrowser = !showFileBrowser }) {
                     Icon(
                         imageVector = Icons.Filled.Folder,
