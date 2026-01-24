@@ -89,12 +89,29 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
                 }
             }
 
+            // Artwork with optional embedded thumbnail overlay
+            val ctx = LocalContext.current
+            val embeddedBitmapState = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = currentUri) {
+                value = try { com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, currentUri) } catch (_: Exception) { null }
+            }
+
             Box(modifier = Modifier.size(200.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
                 Image(
                     painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
                     contentDescription = "Album",
                     modifier = Modifier.size(180.dp).rotate(rotationAnim.value % 360f)
                 )
+
+                if (embeddedBitmapState.value != null) {
+                    Image(
+                        bitmap = embeddedBitmapState.value!!,
+                        contentDescription = "Embedded artwork",
+                        modifier = Modifier
+                            .size(140.dp)
+                            .clip(CircleShape)
+                            .rotate(rotationAnim.value % 360f)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))

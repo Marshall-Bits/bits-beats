@@ -175,7 +175,7 @@ if (!active.isNullOrBlank()) {
 
 Notas operativas
 - Asegúrate de que todas las partes de la app que inician la reproducción desde una playlist (por ejemplo `PlaylistDetailScreen`) llamen a `playQueue(..., playlistName = name)` en vez de solo `playQueue(...)`. Si no se pasa `playlistName`, la app no podrá saber cuál es la playlist activa.
-- Ten en cuenta que `activePlaylistName` es sólo un puntero nominal: la información real de la playlist (lista de URIs) debe seguir guardándose en `PlaylistStore` y/o en la `queue` persistida.
+- Ten en cuenta que `activePlaylistName` es solo un puntero nominal: la información real de la playlist (lista de URIs) debe seguir guardándose en `PlaylistStore` y/o en la `queue` persistida.
 - Para un comportamiento robusto, cuando se elimine o renombre una playlist, actualiza `activePlaylistName` si apunta a la playlist afectada (por ejemplo, clear o reemplazar el nombre).
 
 Nuevo: menú de tres puntos en `PlaylistDetailScreen` (Edit / Delete / Add image)
@@ -283,4 +283,29 @@ imageLauncher.launch(arrayOf("image/*"))
   - Notas de migración (si usas DataStore en el futuro):
     - Si migras `PlaylistStore` a DataStore, expón un Flow<Map<String, PlaylistMeta>> que `PlaylistsViewModel` pueda observar y mapear a UI State. Esto hace la sincronización trivial.
 
-*** End Patch
+12) Artwork embebido por pista (thumbnails)
+ - Objetivo funcional:
+   - Para cada pista (track) intentaremos leer la miniatura embebida (embedded artwork / ID3 APIC) desde el archivo de audio. Si existe, la mostraremos sobrepuesta encima de la imagen `song_default` (que sigue siendo el fondo). La miniatura aparecerá recortada en círculo y un poco más pequeña que `song_default`.
+ - UX / tamaños recomendados:
+   - `PlayerScreen`: `song_default` se muestra a 180dp; la miniatura embebida mostrarse centrada encima con un tamaño algo menor (p. ej. 140dp) y clipada a `CircleShape`.
+   - `PlaybackMiniPlayer`: `song_default` se muestra a 48dp; la miniatura embebida mostrarse centrada encima con tamaño p. ej. 40dp y `CircleShape`.
+   - Si no existe miniatura embebida, mostrar únicamente `song_default` (sin overlay).
+ - Flujo técnico recomendado:
+   1. Extraer la imagen embebida con `MediaMetadataRetriever.embeddedPicture` usando un helper que se ejecute en IO (no en UI thread). Devuelve `ImageBitmap?` o `null` si no existe o falla.
+   2. Cargar la imagen de forma asincrónica en Compose con `produceState` o con `remember` + `LaunchedEffect` + `withContext(Dispatchers.IO)` para no bloquear la UI.
+   3. En el composable que dibuja el artwork (tanto en `PlayerScreen` como en `PlaybackMiniPlayer`): usar un `Box` con `Image(painterResource(song_default))` y, si `embeddedBitmap != null`, dibujar encima `Image(bitmap = embeddedBitmap, modifier = Modifier.size(...).clip(CircleShape))` centrándola.
+   4. Asegurar persistencia de permisos si la artwork proviene de `content://` URIs (SAF) y se necesita reabrir más adelante (takePersistableUriPermission); para archivos locales vía MediaStore no es necesario.
+ - Implementación (ejemplo de helper, idea):
+   - Helper (Kotlin suspending):
+     - Abrir `ParcelFileDescriptor` desde `context.contentResolver.openFileDescriptor(uri, "r")` o usar direct path si está permitido.
+     - Usar `MediaMetadataRetriever.setDataSource(fd)` y `retriever.embeddedPicture` para obtener bytes.
+     - Decodificar con `BitmapFactory.decodeByteArray` y convertir a `ImageBitmap` con `asImageBitmap()`.
+     - Siempre liberar `retriever.release()` y cerrar `ParcelFileDescriptor`.
+   - En Compose (pseudocódigo):
+     - val embedded = produceState<ImageBitmap?>(initialValue = null, key1 = audioUri) { value = loadEmbeddedArtwork(context, audioUri) }
+     - Box { Image(painterResource(song_default)); if (embedded.value != null) Image(bitmap = embedded.value!!, modifier = Modifier.size(...).clip(CircleShape)) }
+ - Rendimiento y librerías:
+   - Si vas a mostrar miniaturas para muchas pistas (p. ej. en una lista), considera usar Coil (coil-compose) para caching y threading. Si no quieres añadir dependencias, asegúrate de cargar bitmaps en background y cachear en memoria (por ejemplo en un ViewModel) para evitar decodificaciones repetidas.
+ - Fallback y errores:
+   - Si la extracción falla por permisos o formato, registrar el fallo (Log) y mostrar `song_default` sin overlay.
+   - No lanzar excepciones hacia la UI.

@@ -64,14 +64,34 @@ fun PlaybackMiniPlayer(navController: NavHostController, modifier: Modifier = Mo
             }
         }
 
-        Image(
-            painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
-            contentDescription = "Artwork",
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .rotate(rotationAnim.value % 360f)
-        )
+        // Load embedded artwork (if any) asynchronously
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val embeddedBitmapState = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = currentUri) {
+            value = try { com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, currentUri) } catch (_: Exception) { null }
+        }
+
+        Box(contentAlignment = Alignment.Center) {
+            Image(
+                painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
+                contentDescription = "Artwork",
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .rotate(rotationAnim.value % 360f)
+            )
+
+            // overlay embedded artwork if present (slightly smaller)
+            if (embeddedBitmapState.value != null) {
+                Image(
+                    bitmap = embeddedBitmapState.value!!,
+                    contentDescription = "Embedded artwork",
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .rotate(rotationAnim.value % 360f)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
