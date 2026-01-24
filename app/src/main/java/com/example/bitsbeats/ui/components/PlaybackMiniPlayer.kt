@@ -39,7 +39,7 @@ fun PlaybackMiniPlayer(navController: NavHostController, modifier: Modifier = Mo
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF2D2D2D))
+            .background(Color(0xFF010000))
             // navigate to the 'player' route which will NOT reinitialize playback when a track is already loaded
             .clickable { navController.navigate("player") }
             .padding(8.dp),

@@ -29,7 +29,7 @@ fun HomeScreen(onNavigateToPlayer: () -> Unit, onNavigateToPlaylist: () -> Unit,
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.DarkGray),
+            .background(Color(0xFF010000)),
         contentAlignment = Alignment.Center
     ) {
         Column(

@@ -80,7 +80,7 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
     // refresh when returning
     LaunchedEffect(Unit) { /* no-op; UI will update on actions */ }
 
-    Box(modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color.DarkGray), contentAlignment = Alignment.TopCenter) {
+    Box(modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color(0xFF010000)), contentAlignment = Alignment.TopCenter) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = "Mis Playlists", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(16.dp))
 

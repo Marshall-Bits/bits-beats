@@ -153,7 +153,7 @@ fun FileBrowserScreen(
 
     Column(modifier = Modifier
         .fillMaxSize()
-        .background(Color.DarkGray)) {
+        .background(Color(0xFF010000))) {
         TopAppBar(
             title = {
                 Text(text = if (!showFileBrowser) "Canciones Recientes" else File(currentPath).name.takeIf { it.isNotBlank() }
@@ -225,7 +225,8 @@ fun FileBrowserScreen(
                     }
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D))
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF010000))
+            // make top app bar match global background #010000
         )
 
         if (!hasPermission) {

@@ -66,7 +66,7 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.DarkGray),
+            .background(Color(0xFF010000)),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(24.dp)) {

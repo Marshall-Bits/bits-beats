@@ -57,6 +57,7 @@ import com.example.bitsbeats.R
 import com.example.bitsbeats.ui.components.PlaybackController
 import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.util.formatDuration
+import androidx.core.net.toUri
 
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,14 +94,17 @@ fun PlaylistDetailScreen(
     ) {
         value = null
         if (!currentArtworkUri.isNullOrBlank()) {
-            try {
-                val u = Uri.parse(currentArtworkUri)
-                context.contentResolver.openInputStream(u)?.use { stream ->
-                    val bmp = BitmapFactory.decodeStream(stream)
-                    value = bmp?.asImageBitmap()
+            val uriStr = currentArtworkUri
+            if (!uriStr.isNullOrBlank()) {
+                try {
+                    val u = uriStr.toUri()
+                    context.contentResolver.openInputStream(u)?.use { stream ->
+                        val bmp = BitmapFactory.decodeStream(stream)
+                        value = bmp?.asImageBitmap()
+                    }
+                } catch (_: Exception) {
+                    value = null
                 }
-            } catch (_: Exception) {
-                value = null
             }
         }
     }
@@ -115,9 +119,8 @@ fun PlaylistDetailScreen(
             val uris = items.map { it["uri"] as? String ?: "" }.filter { it.isNotBlank() }
             if (uris.isEmpty()) return
             PlaybackController.playQueue(context, uris, index, playlistName = playlistName)
-        } catch (e: Exception) {
-            Toast.makeText(context, "No se pudo reproducir: ${e.message}", Toast.LENGTH_SHORT)
-                .show()
+        } catch (_: Exception) {
+            Toast.makeText(context, "No se pudo reproducir", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -141,7 +144,7 @@ fun PlaylistDetailScreen(
     Column(modifier = Modifier
         .fillMaxSize()
         .statusBarsPadding()
-        .background(Color.DarkGray)) {
+        .background(Color(0xFF010000))) {
         TopAppBar(
             title = { Text(text = playlistName, color = Color.White) },
             navigationIcon = {
@@ -206,7 +209,7 @@ fun PlaylistDetailScreen(
                     )
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D))
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF010000))
         )
 
         // header artwork
@@ -287,7 +290,7 @@ fun PlaylistDetailScreen(
                             Toast.makeText(context, "Playlist eliminada", Toast.LENGTH_SHORT).show()
                             showDeleteConfirm = false
                             onBackToList()
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             Toast.makeText(
                                 context,
                                 "No se pudo eliminar la playlist",
