@@ -35,7 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.bitsbeats.ui.components.PlaybackController
 import com.example.bitsbeats.ui.components.PlaylistStore
-import com.example.bitsbeats.formatDuration
+import com.example.bitsbeats.util.formatDuration
 
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
 @OptIn(ExperimentalMaterial3Api::class)

@@ -287,36 +287,6 @@ class MainActivity : ComponentActivity() {
 }
 
 
-// Función para formatear la duración en mm:ss
-@SuppressLint("DefaultLocale")
-fun formatDuration(durationMs: Long): String {
-    val minutes = (durationMs / 1000) / 60
-    val seconds = (durationMs / 1000) % 60
-    return String.format("%d:%02d", minutes, seconds)
-}
-
-
-// Helper para resolver una ruta de archivo a un audioId de MediaStore
-fun queryAudioIdFromPath(contentResolver: ContentResolver, filePath: String): Long? {
-    val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DATA)
-    val selection = "${MediaStore.Audio.Media.DATA} = ?"
-    val selectionArgs = arrayOf(filePath)
-
-    contentResolver.query(
-        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-        projection,
-        selection,
-        selectionArgs,
-        null
-    )?.use { cursor ->
-        if (cursor.moveToFirst()) {
-            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            return cursor.getLong(idColumn)
-        }
-    }
-    return null
-}
-
 @Preview(showBackground = true)
 @Composable
 fun HomeScreenPreview() {

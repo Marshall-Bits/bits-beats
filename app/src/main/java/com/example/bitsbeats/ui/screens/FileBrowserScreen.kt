@@ -52,7 +52,7 @@ import com.example.bitsbeats.data.FileItem
 import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.data.FileRepository.getDirectoryContents
 import com.example.bitsbeats.data.AudioFile
-import com.example.bitsbeats.queryAudioIdFromPath
+import com.example.bitsbeats.data.MediaRepository.queryAudioIdFromPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -79,17 +79,22 @@ fun FileBrowserScreen(
 
     DisposableEffect(Unit) { onDispose { /* nothing local to release */ } }
 
-    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
-    val permissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
-        hasPermission = isGranted
-        if (isGranted) {
-            audioFiles = getRecentAudioFiles(context.contentResolver)
-            files = getDirectoryContents(currentPath)
+    val permission =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+    val permissionLauncher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
+            hasPermission = isGranted
+            if (isGranted) {
+                audioFiles = getRecentAudioFiles(context.contentResolver)
+                files = getDirectoryContents(currentPath)
+            }
         }
-    }
 
     LaunchedEffect(Unit) {
-        hasPermission = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            permission
+        ) == PackageManager.PERMISSION_GRANTED
         if (hasPermission) {
             audioFiles = getRecentAudioFiles(context.contentResolver)
             files = getDirectoryContents(currentPath)
@@ -115,9 +120,14 @@ fun FileBrowserScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.DarkGray)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.DarkGray)) {
         TopAppBar(
-            title = { Text(text = if (!showFileBrowser) "Canciones Recientes" else File(currentPath).name.takeIf { it.isNotBlank() } ?: "Almacenamiento", color = Color.White) },
+            title = {
+                Text(text = if (!showFileBrowser) "Canciones Recientes" else File(currentPath).name.takeIf { it.isNotBlank() }
+                    ?: "Almacenamiento", color = Color.White)
+            },
             navigationIcon = {
                 IconButton(onClick = {
                     if (showFileBrowser) {
@@ -131,15 +141,31 @@ fun FileBrowserScreen(
                         onNavigateBack()
                     }
                 }) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White)
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Atrás",
+                        tint = Color.White
+                    )
                 }
             },
-            actions = { IconButton(onClick = { showFileBrowser = !showFileBrowser }) { Icon(imageVector = Icons.Filled.Folder, contentDescription = "Explorar", tint = Color(0xFFFFD54F)) } },
+            actions = {
+                IconButton(onClick = { showFileBrowser = !showFileBrowser }) {
+                    Icon(
+                        imageVector = Icons.Filled.Folder,
+                        contentDescription = "Explorar",
+                        tint = Color(0xFFFFD54F)
+                    )
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D))
         )
 
         if (!hasPermission) {
-            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text("Se necesita permiso para acceder a los archivos", color = Color.White)
                 Button(onClick = { permissionLauncher.launch(permission) }) { Text("Conceder permiso") }
             }
@@ -148,9 +174,14 @@ fun FileBrowserScreen(
 
         if (!showFileBrowser) {
             // Recent audio list: tap the row to play, '+' to add to playlist when applicable
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item{
-                    Spacer(modifier = Modifier.height(12.dp) )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
                 items(audioFiles) { audio ->
                     Row(
@@ -163,29 +194,55 @@ fun FileBrowserScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(audio.title, color = Color.White)
-                            Text(audio.artist.ifEmpty { "Artista desconocido" }, color = Color.LightGray)
+                            Text(
+                                audio.artist.ifEmpty { "Artista desconocido" },
+                                color = Color.LightGray
+                            )
                         }
 
                         if (addToPlaylistName != null) {
                             IconButton(onClick = {
-                                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audio.id).toString()
-                                PlaylistStore.addItemToPlaylist(context, addToPlaylistName, uri, audio.title, audio.artist, audio.duration)
-                                Toast.makeText(context, "Añadida a $addToPlaylistName", Toast.LENGTH_SHORT).show()
+                                val uri = ContentUris.withAppendedId(
+                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                    audio.id
+                                ).toString()
+                                PlaylistStore.addItemToPlaylist(
+                                    context,
+                                    addToPlaylistName,
+                                    uri,
+                                    audio.title,
+                                    audio.artist,
+                                    audio.duration
+                                )
+                                Toast.makeText(
+                                    context,
+                                    "Añadida a $addToPlaylistName",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }) {
-                                Icon(imageVector = Icons.Filled.Add, contentDescription = "Añadir", tint = Color.White)
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = "Añadir",
+                                    tint = Color.White
+                                )
                             }
                         }
                     }
                 }
-                item{
-                    Spacer(modifier = Modifier.height(200.dp) )
+                item {
+                    Spacer(modifier = Modifier.height(200.dp))
                 }
             }
         } else {
             // File browser: tap directories to enter, tap audio rows to play, '+' to add to playlist
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item{
-                    Spacer(modifier = Modifier.height(12.dp) )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
                 items(files) { fileItem ->
                     val resolvedId = if (fileItem.isAudio) pathToId[fileItem.path] else null
@@ -198,10 +255,17 @@ fun FileBrowserScreen(
                                     currentPath = fileItem.path
                                 } else if (fileItem.isAudio) {
                                     val rid = resolvedId
-                                    if (rid != null) onFileSelected(rid) else Toast.makeText(context, "No indexado en MediaStore", Toast.LENGTH_SHORT).show()
+                                    if (rid != null) onFileSelected(rid) else Toast.makeText(
+                                        context,
+                                        "No indexado en MediaStore",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             }
-                            .background(if (fileItem.isDirectory) Color(0xFF4A4A4A) else Color.Gray, shape = RoundedCornerShape(12.dp))
+                            .background(
+                                if (fileItem.isDirectory) Color(0xFF4A4A4A) else Color.Gray,
+                                shape = RoundedCornerShape(12.dp)
+                            )
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -212,28 +276,63 @@ fun FileBrowserScreen(
                         if (fileItem.isAudio && addToPlaylistName != null) {
                             IconButton(onClick = {
                                 if (resolvedId != null) {
-                                    val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString()
+                                    val uri = ContentUris.withAppendedId(
+                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                        resolvedId
+                                    ).toString()
                                     var title = File(fileItem.path).name
                                     var artist = ""
                                     var duration = 0L
                                     try {
-                                        context.contentResolver.query(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId), arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c ->
+                                        context.contentResolver.query(
+                                            ContentUris.withAppendedId(
+                                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                                resolvedId
+                                            ),
+                                            arrayOf(
+                                                MediaStore.Audio.Media.TITLE,
+                                                MediaStore.Audio.Media.ARTIST,
+                                                MediaStore.Audio.Media.DURATION
+                                            ),
+                                            null,
+                                            null,
+                                            null
+                                        )?.use { c ->
                                             if (c.moveToFirst()) {
                                                 title = c.getString(0) ?: title
                                                 artist = c.getString(1) ?: ""
                                                 duration = c.getLong(2)
                                             }
                                         }
-                                    } catch (_: Exception) {}
-                                    PlaylistStore.addItemToPlaylist(context, addToPlaylistName, uri, title, artist, duration)
-                                    Toast.makeText(context, "Añadida a $addToPlaylistName", Toast.LENGTH_SHORT).show()
-                                } else Toast.makeText(context, "No indexado", Toast.LENGTH_SHORT).show()
-                            }) { Icon(imageVector = Icons.Filled.Add, contentDescription = "Añadir", tint = Color.White) }
+                                    } catch (_: Exception) {
+                                    }
+                                    PlaylistStore.addItemToPlaylist(
+                                        context,
+                                        addToPlaylistName,
+                                        uri,
+                                        title,
+                                        artist,
+                                        duration
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        "Añadida a $addToPlaylistName",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else Toast.makeText(context, "No indexado", Toast.LENGTH_SHORT)
+                                    .show()
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = "Añadir",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }
-                item{
-                    Spacer(modifier = Modifier.height(200.dp) )
+                item {
+                    Spacer(modifier = Modifier.height(200.dp))
                 }
             }
         }

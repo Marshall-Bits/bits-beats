@@ -26,7 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bitsbeats.ui.components.PlaybackController
-import com.example.bitsbeats.formatDuration
+import com.example.bitsbeats.util.formatDuration
 
 @Composable
 fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
