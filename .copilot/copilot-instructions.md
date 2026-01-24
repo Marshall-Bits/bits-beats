@@ -174,69 +174,60 @@ Notas operativas
 - Ten en cuenta que `activePlaylistName` es sólo un puntero nominal: la información real de la playlist (lista de URIs) debe seguir guardándose en `PlaylistStore` y/o en la `queue` persistida.
 - Para un comportamiento robusto, cuando se elimine o renombre una playlist, actualiza `activePlaylistName` si apunta a la playlist afectada (por ejemplo, clear o reemplazar el nombre).
 
-Testing rápido
-- Escenario 1 (hay playlist activa): reproducir desde `PlaylistDetailScreen` pasando `playlistName` → al pulsar el icono Playlists debe abrir `PlaylistDetailScreen` para esa playlist.
-- Escenario 2 (sin playlist activa): pulsar Playlists debe abrir la lista de playlists.
+Nuevo: menú de tres puntos en `PlaylistDetailScreen` (Edit / Delete / Add image)
+-- Resumen funcional:
+  - En la cabecera (`TopAppBar`) de `PlaylistDetailScreen` habrá un botón de "tres puntos" (overflow menu) en la parte superior derecha.
+  - Opciones del menú:
+    - Edit name: abre un diálogo para cambiar el nombre de la playlist. Al confirmar, renombrar en `PlaylistStore` y navegar a la lista de playlists (o refrescar la UI). Mantener la imagen asociada si existía (mover la entrada de imagen en `PlaylistStore`).
+    - Delete playlist: pedir confirmación; al confirmar, borrar la playlist de `PlaylistStore`. Si la playlist borrada es la activa (`PlaybackController.activePlaylistName == name`), llamar a `PlaybackController.clearPlaybackAndReset()` para parar y vaciar el reproductor; luego navegar a la lista de playlists.
+    - Add image: abrir el selector de documentos (`Intent.ACTION_OPEN_DOCUMENT`) filtrado a imágenes (`image/*`) mediante `ActivityResultContracts.OpenDocument()` o `OpenDocument` launcher. Al seleccionar:
+      - Tomar permiso persistente: `context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)` para poder acceder más tarde.
+      - Guardar la URI como string en `PlaylistStore.setPlaylistImage(context, playlistName, uri.toString())`.
+      - Actualizar la cabecera para mostrar la imagen recién seleccionada (cargar con `contentResolver.openInputStream(uri)` y decodificar bitmap para mostrar con Compose).
 
-Migración recomendada
-- A medio plazo, migrar la persistencia de `last_playback_state` a DataStore (preferences) y mantener `activePlaylistName` en la misma estructura para integridad y consistencia.
+-- Implementación recomendada (snippets y notas técnicas):
+- `PlaylistStore`:
+  - Añadir funciones (ya añadidas en esta base):
+    - `setPlaylistImage(context, name, uri: String)` — guarda en SharedPreferences/JSON el mapeo name->uri.
+    - `getPlaylistImage(context, name): String?` — devuelve la URI guardada o null.
+    - `deletePlaylist(...)` y `renamePlaylist(...)` deben limpiar/mover la entrada de imagen (ya implementado en `PlaylistStore`).
 
-12) Migraciones y tareas prioritarias (roadmap)
-- Corto plazo (prioridad alta):
-  - Mover todas las composables a paquetes `ui.screens` / `ui.components` (ya parcialmente hecho).
-  - Reemplazar SharedPreferences por DataStore para persistencia de estado/playlists.
-  - Consolidar un único `PlaybackController` o mejor, `PlaybackViewModel` y definir su API público (playUri(uri), playQueue(list, index), togglePlayPause(), seekTo(ms), next(), prev(), getState()).
-- Medio plazo:
-  - Migrar playback a ExoPlayer/Media3 (mejor soporte de cola, notificaciones y background).
-  - Implementar MediaSession + Foreground Service si se requiere playback en background.
-- Largo plazo:
-  - Añadir DI (Hilt), tests unitarios e instrumentados en CI.
-
-13) Formatos de persistencia (recomendado)
-- Estado del reproductor (DataStore - Preferences):
-  - last_played_uri: String
-  - last_position_ms: Long
-  - last_is_playing: Boolean (pero preferir false on restore)
-  - active_playlist_name: String
-- Playlists: JSON persistido en fichero `filesDir/playlists.json` o DataStore (mapa de String->Array).
-
-14) Reglas concretas para nuevos commits / PRs
-- Cada PR pequeño y con un objetivo (mover un screen, arreglar un bug, añadir prueba).
-- Añadir tests cuando se cambia lógica del dominio (playlist, playback que afectan UX).
-- Seguir el package layout y naming aquí descrito.
-
-15) Snippets y patrones recomendados (rápido)
-- ViewModel-state exposure (esquema):
+- `PlaylistDetailScreen` UI:
+  - Añadir `IconButton` en `TopAppBar` con `Icons.Filled.MoreVert`.
+  - Usar `DropdownMenu` para las tres opciones.
+  - Para Add image usar:
 
 ```kotlin
-// in PlaybackViewModel.kt
-private val _uiState = MutableStateFlow(PlayerUiState())
-val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
-
-fun playUri(uri: String) {
-  viewModelScope.launch { playbackController.playUri(uri); updateState() }
+val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+  uri?.let {
+    // persist permission
+    context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    PlaylistStore.setPlaylistImage(context, playlistName, it.toString())
+    currentArtworkUri = it.toString() // variable de estado para forzar recomposición
+  }
 }
+imageLauncher.launch(arrayOf("image/*"))
 ```
 
-- Composable receives state
+- Para mostrar la imagen en la cabecera:
+  - Intentar cargar `currentArtworkUri` con `contentResolver.openInputStream(uri)` y `BitmapFactory.decodeStream` → `asImageBitmap()` (usando `produceState` para la carga asincrónica) y dibujar con `Image(bitmap = ...)`.
+  - Si `currentArtworkUri` es null o la carga falla, usar `R.drawable.playlist_default` como fallback.
 
-```kotlin
-@Composable
-fun PlayerScreen(state: PlayerUiState, onPlay: ()->Unit, onSeek: (Int)->Unit) {
-  // purely rendering state, no repository calls
-}
-```
+-- Comportamiento al borrar una playlist activa
+  - Ya explicado antes: al borrar la playlist activa, llamar a `PlaybackController.clearPlaybackAndReset()` y navegar a la lista.
 
-16) Recursos / enlaces útiles (de referencia rápida)
-- ExoPlayer / Media3 docs: https://exoplayer.dev/  and https://developer.android.com/media
-- DataStore: https://developer.android.com/topic/libraries/architecture/datastore
-- Compose navigation: https://developer.android.com/jetpack/compose/navigation
-- Permissions (Android 13): https://developer.android.com/about/versions/13/behavior-changes-13
+-- Permisos y SAF
+  - Al usar `OpenDocument`, debes pedir persistable permissions cuando recibes la URI. Esto permite volver a abrir la URI tras reinicios. Ejemplo:
+    - `context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)`
+  - Guardar la URI (string) en `PlaylistStore` (SharedPreferences JSON) para reusar.
 
-17) Notas finales para el agente (tus futuras tareas)
-- Antes de mover o importar nuevas librerías: comprobar `build.gradle(.kts)` y usar versiones coherentes (Compose BOM). Evitar añadir libs que el proyecto no tenga y que requieran cambios de configuración masiva sin avisar.
-- Cuando añadas nuevos archivos, ubícalos según la jerarquía propuesta para mantener consistencia.
-- Si introduces reproducción en background, crea una interfaz `Player` que abstraiga `ExoPlayer` o `MediaPlayer` para poder mockear en tests.
+-- UX notes
+  - Mostrar la imagen en la cabecera (alto ~180dp). El overflow menu debe cerrar automáticamente al escoger una acción.
+  - Tras renombrar o borrar, navegar a la lista de playlists para evitar mostrar pantalla de detalle inexistente.
+
+-- Testing
+  - Test manual: elegir imagen desde Files app, cerrar app, reabrir y comprobar que la imagen sigue mostrando (permiso persistente + URI guardada).
+  - Test de borrado: reproducir una playlist con nombre X, borrar X, comprobar `PlaybackController` quedó vacío y que la UI navegó a la lista.
 
 ---
 

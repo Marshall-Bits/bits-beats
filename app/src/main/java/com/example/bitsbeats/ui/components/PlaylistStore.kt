@@ -9,6 +9,7 @@ import org.json.JSONObject
 object PlaylistStore {
     private const val PREFS = "bitsbeats_prefs"
     private const val KEY_PLAYLISTS = "playlists_json"
+    private const val KEY_PLAYLIST_IMAGES = "playlists_images_json"
 
     // Format: JSON object { "playlistName": [ {"uri": "...", "title":"...","artist":"...","duration":12345}, ... ], ... }
     fun loadAll(context: Context): Map<String, List<Map<String, Any>>> {
@@ -65,6 +66,18 @@ object PlaylistStore {
         val all = loadAll(context).toMutableMap()
         all.remove(name)
         saveAll(context, all)
+        // remove associated image if present
+        try {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val imgJson = prefs.getString(KEY_PLAYLIST_IMAGES, null)
+            if (!imgJson.isNullOrBlank()) {
+                val root = JSONObject(imgJson)
+                if (root.has(name)) {
+                    root.remove(name)
+                    prefs.edit { putString(KEY_PLAYLIST_IMAGES, root.toString()) }
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     fun renamePlaylist(context: Context, oldName: String, newName: String): Boolean {
@@ -74,6 +87,20 @@ object PlaylistStore {
         val value = all.remove(oldName) ?: emptyList()
         all[newName] = value
         saveAll(context, all)
+        // move image entry if present
+        try {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val imgJson = prefs.getString(KEY_PLAYLIST_IMAGES, null)
+            if (!imgJson.isNullOrBlank()) {
+                val root = JSONObject(imgJson)
+                val v = root.optString(oldName, "").takeIf { it.isNotBlank() }
+                if (!v.isNullOrBlank()) {
+                    root.remove(oldName)
+                    root.put(newName, v)
+                    prefs.edit { putString(KEY_PLAYLIST_IMAGES, root.toString()) }
+                }
+            }
+        } catch (_: Exception) {}
         return true
     }
 
@@ -88,5 +115,24 @@ object PlaylistStore {
 
     fun getPlaylist(context: Context, name: String): List<Map<String, Any>> {
         return loadAll(context)[name] ?: emptyList()
+    }
+
+    fun setPlaylistImage(context: Context, name: String, uri: String) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val root = try { JSONObject(prefs.getString(KEY_PLAYLIST_IMAGES, "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+            root.put(name, uri)
+            prefs.edit { putString(KEY_PLAYLIST_IMAGES, root.toString()) }
+        } catch (_: Exception) {}
+    }
+
+    fun getPlaylistImage(context: Context, name: String): String? {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val rootS = prefs.getString(KEY_PLAYLIST_IMAGES, null) ?: return null
+            val root = JSONObject(rootS)
+            val v = root.optString(name, "")
+            v.takeIf { it.isNotBlank() }
+        } catch (_: Exception) { null }
     }
 }
