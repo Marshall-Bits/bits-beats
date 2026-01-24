@@ -275,33 +275,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
-fun PlaybackMiniPlayer(navController: androidx.navigation.NavHostController, modifier: Modifier = Modifier) {
-    val title = PlaybackController.title
-    val artist = PlaybackController.artist
-    val isPlaying = PlaybackController.isPlaying
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF2D2D2D))
-            // navigate to the 'player' route which will NOT reinitialize playback when a track is already loaded
-            .clickable { navController.navigate("player") }
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(imageVector = Icons.Filled.Album, contentDescription = "Artwork", tint = Color.White, modifier = Modifier.size(48.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-            Text(text = artist.ifBlank { "Artista desconocido" }, color = Color.LightGray, maxLines = 1)
-        }
-        IconButton(onClick = { PlaybackController.togglePlayPause() }) {
-            Icon(imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", tint = Color.White)
-        }
-    }
-}
 
 @Composable
 fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
