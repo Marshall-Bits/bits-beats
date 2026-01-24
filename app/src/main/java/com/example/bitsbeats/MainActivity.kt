@@ -56,15 +56,6 @@ import com.example.bitsbeats.ui.screens.PlayerScreen
 import com.example.bitsbeats.ui.screens.PlaylistDetailScreen
 import com.example.bitsbeats.ui.screens.PlaylistScreen
 
-
-// Data class para representar un elemento del explorador de archivos
-data class FileItem(
-    val name: String,
-    val path: String,
-    val isDirectory: Boolean,
-    val isAudio: Boolean = false
-)
-
 // PlaybackController moved to `PlaybackController.kt` (same package) to keep MainActivity concise
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,7 +67,10 @@ class MainActivity : ComponentActivity() {
                 val appContext = LocalContext.current
                 // restore persisted playback state once when the UI is composed
                 LaunchedEffect(Unit) {
-                    try { PlaybackController.restoreState(appContext) } catch (_: Exception) {}
+                    try {
+                        PlaybackController.restoreState(appContext)
+                    } catch (_: Exception) {
+                    }
                 }
                 Box(modifier = Modifier.fillMaxSize()) {
                     NavHost(
@@ -121,7 +115,9 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("player/{audioId}") { backStackEntry ->
-                            val audioId = backStackEntry.arguments?.getString("audioId")?.toLongOrNull() ?: -1L
+                            val audioId =
+                                backStackEntry.arguments?.getString("audioId")?.toLongOrNull()
+                                    ?: -1L
                             PlayerScreen(audioId = audioId)
                         }
 
@@ -137,7 +133,11 @@ class MainActivity : ComponentActivity() {
 
                         composable("playlistDetail/{name}") { backStackEntry ->
                             val encoded = backStackEntry.arguments?.getString("name") ?: ""
-                            val name = try { URLDecoder.decode(encoded, "UTF-8") } catch (_: Exception) { encoded }
+                            val name = try {
+                                URLDecoder.decode(encoded, "UTF-8")
+                            } catch (_: Exception) {
+                                encoded
+                            }
                             PlaylistDetailScreen(
                                 playlistName = name,
                                 onBack = { navController.popBackStack() },
@@ -159,7 +159,11 @@ class MainActivity : ComponentActivity() {
 
                         composable("filebrowser/{addTo}") { backStackEntry ->
                             val encoded = backStackEntry.arguments?.getString("addTo") ?: ""
-                            val playlistName = try { URLDecoder.decode(encoded, "UTF-8") } catch (_: Exception) { encoded }
+                            val playlistName = try {
+                                URLDecoder.decode(encoded, "UTF-8")
+                            } catch (_: Exception) {
+                                encoded
+                            }
                             FileBrowserScreen(
                                 onFileSelected = { audioId ->
                                     PlaybackController.playAudioId(
@@ -176,21 +180,37 @@ class MainActivity : ComponentActivity() {
                     // Mini player overlay: show on all screens except the PlayerScreen route, with slide up/down animations
                     val navBackStack by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStack?.destination?.route ?: ""
-                    val showMini = !currentRoute.startsWith("player") && PlaybackController.currentUri != null
+                    val showMini =
+                        !currentRoute.startsWith("player") && PlaybackController.currentUri != null
                     // Bottom navigation menu height
                     val bottomNavHeight = 140.dp
 
                     AnimatedVisibility(
                         visible = showMini,
                         // align AnimatedVisibility at bottom, respect system nav insets and pad upwards so mini-player sits neatly above the bottom nav menu
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 8.dp).padding(bottom = bottomNavHeight).zIndex(0f),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 8.dp)
+                            .padding(bottom = bottomNavHeight)
+                            .zIndex(0f),
                         // start from further below so it appears to come from outside the screen edge
-                        enter = slideInVertically(initialOffsetY = { fullHeight -> fullHeight * 3 }, animationSpec = tween(300)),
-                        exit = slideOutVertically(targetOffsetY = { fullHeight -> fullHeight * 3 }, animationSpec = tween(300))
+                        enter = slideInVertically(
+                            initialOffsetY = { fullHeight -> fullHeight * 3 },
+                            animationSpec = tween(300)
+                        ),
+                        exit = slideOutVertically(
+                            targetOffsetY = { fullHeight -> fullHeight * 3 },
+                            animationSpec = tween(300)
+                        )
                     ) {
                         // child should fill the width provided by the AnimatedVisibility container and have a controlled height
-                        PlaybackMiniPlayer(navController = navController, modifier = Modifier.fillMaxWidth().height(64.dp))
-                     }
+                        PlaybackMiniPlayer(
+                            navController = navController,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                        )
+                    }
 
                     // Bottom navigation menu: always visible at the bottom (above system nav), below mini-player
                     Box(
@@ -202,24 +222,51 @@ class MainActivity : ComponentActivity() {
                             .zIndex(1f),
                         contentAlignment = Alignment.TopCenter
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 20.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             // Home
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { navController.navigate("home") }) {
-                                Icon(imageVector = Icons.Filled.Home, contentDescription = "Inicio", tint = Color.White, modifier = Modifier.size(24.dp))
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable { navController.navigate("home") }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Home,
+                                    contentDescription = "Inicio",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(text = "Inicio", color = Color.White, fontSize = 12.sp)
                             }
 
                             // Playlists
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { navController.navigate("playlist") }) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Playlists", tint = Color.White, modifier = Modifier.size(24.dp))
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable { navController.navigate("playlist") }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                    contentDescription = "Playlists",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(text = "Playlists", color = Color.White, fontSize = 12.sp)
                             }
 
                             // Search (unused for now)
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { /* no-op */ }) {
-                                Icon(imageVector = Icons.Filled.Search, contentDescription = "Buscar", tint = Color.White, modifier = Modifier.size(24.dp))
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable { /* no-op */ }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Search,
+                                    contentDescription = "Buscar",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(text = "Buscar", color = Color.White, fontSize = 12.sp)
                             }
@@ -232,7 +279,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        try { PlaybackController.release() } catch (_: Exception) {}
+        try {
+            PlaybackController.release()
+        } catch (_: Exception) {
+        }
     }
 }
 
@@ -245,35 +295,6 @@ fun formatDuration(durationMs: Long): String {
     return String.format("%d:%02d", minutes, seconds)
 }
 
-// Función para obtener el contenido de un directorio (usada por el explorador)
-fun getDirectoryContents(path: String): List<FileItem> {
-    val file = File(path)
-    val items = mutableListOf<FileItem>()
-
-    if (!file.exists() || !file.isDirectory) {
-        return items
-    }
-
-    val audioExtensions = listOf("mp3", "m4a", "wav", "ogg", "flac", "aac", "wma")
-
-    file.listFiles()?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))?.forEach { child ->
-        val extension = child.extension.lowercase()
-        val isAudio = audioExtensions.contains(extension)
-
-        if (child.isDirectory || isAudio) {
-            items.add(
-                FileItem(
-                    name = child.name,
-                    path = child.absolutePath,
-                    isDirectory = child.isDirectory,
-                    isAudio = isAudio
-                )
-            )
-        }
-    }
-
-    return items
-}
 
 // Helper para resolver una ruta de archivo a un audioId de MediaStore
 fun queryAudioIdFromPath(contentResolver: ContentResolver, filePath: String): Long? {
