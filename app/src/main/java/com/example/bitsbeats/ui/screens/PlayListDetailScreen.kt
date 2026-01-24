@@ -76,9 +76,6 @@ fun PlaylistDetailScreen(
     var renameText by remember { mutableStateOf(playlistName) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // Observe controller state
-    val playbackIsPlaying = PlaybackController.isPlaying
-
     // artwork URI state (so we can update after picking an image)
     var currentArtworkUri by remember {
         mutableStateOf(
@@ -311,15 +308,9 @@ fun PlaylistDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.End
         ) {
-            Button(onClick = {
-                if (items.isNotEmpty()) {
-                    playIndex(0)
-                } else PlaybackController.togglePlayPause()
-            }, enabled = items.isNotEmpty()) {
-                Text(if (playbackIsPlaying) "PAUSE" else "PLAY")
-            }
+            // Play removed from this screen; control playback via mini-player.
             Button(onClick = onAddSongs) { Text("Add songs") }
         }
 
