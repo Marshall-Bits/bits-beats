@@ -338,6 +338,31 @@ object PlaybackController {
         isPlaying = false
     }
 
+    /** Public helper to clear playback state (stop, clear queue, clear active playlist) */
+    fun clearPlaybackAndReset() {
+        try {
+            stopTicker()
+            try { mediaPlayer?.release() } catch (_: Exception) {}
+            mediaPlayer = null
+
+            // clear runtime state
+            queue = emptyList()
+            queueIndex = -1
+            currentUri = null
+            title = "Sin canción"
+            artist = ""
+            isPlaying = false
+            currentPosition = 0L
+            duration = 0L
+
+            // clear active playlist pointer
+            activePlaylistName = null
+
+            // persist cleared state
+            appContext?.let { saveState(it) }
+        } catch (_: Exception) {}
+    }
+
     /** Cycle repeat mode: OFF -> REPEAT_ALL -> REPEAT_ONE -> OFF */
     fun toggleRepeatMode() {
         repeatMode = when (repeatMode) {

@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bitsbeats.R
 import com.example.bitsbeats.ui.components.PlaylistStore
+import com.example.bitsbeats.ui.components.PlaybackController
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -152,10 +153,19 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                 text = { Text("¿Eliminar la playlist '$nameToDelete'? Esta acción no se puede deshacer.") },
                 confirmButton = {
                     Button(onClick = {
-                        PlaylistStore.deletePlaylist(context, nameToDelete)
-                        playlists = PlaylistStore.loadAll(context).keys.toList()
-                        playlistToDelete = null
-                        Toast.makeText(context, "Playlist eliminada", Toast.LENGTH_SHORT).show()
+                        // PlaylistStore.deletePlaylist returns Unit; perform deletion then handle active playlist cleanup.
+                        try {
+                            PlaylistStore.deletePlaylist(context, nameToDelete)
+                            // If the deleted playlist was the active one, clear playback state
+                            if (PlaybackController.activePlaylistName == nameToDelete) {
+                                PlaybackController.clearPlaybackAndReset()
+                            }
+                            playlists = PlaylistStore.loadAll(context).keys.toList()
+                            playlistToDelete = null
+                            Toast.makeText(context, "Playlist eliminada", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "No se pudo eliminar la playlist", Toast.LENGTH_SHORT).show()
+                        }
                     }) { Text("Eliminar") }
                 },
                 dismissButton = {
