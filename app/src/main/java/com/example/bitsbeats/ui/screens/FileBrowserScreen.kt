@@ -3,12 +3,14 @@ package com.example.bitsbeats.ui.screens
 import android.Manifest
 import android.content.ContentUris
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,7 +48,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.core.content.ContextCompat
 import com.example.bitsbeats.data.MediaRepository.getRecentAudioFiles
 import com.example.bitsbeats.data.FileItem
@@ -192,6 +199,22 @@ fun FileBrowserScreen(
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // thumbnail
+                        val ctx = LocalContext.current
+                        val audioUriString = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audio.id).toString()
+                        var embeddedBitmap by remember(audioUriString) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                        LaunchedEffect(audioUriString) {
+                            embeddedBitmap = try { com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, audioUriString) } catch (_: Exception) { null }
+                        }
+
+                        if (embeddedBitmap != null) {
+                            Image(bitmap = embeddedBitmap!!, contentDescription = "Artwork", modifier = Modifier.size(48.dp).clip(CircleShape))
+                        } else {
+                            Image(painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(48.dp).clip(CircleShape))
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         Column(modifier = Modifier.weight(1f)) {
                             Text(audio.title, color = Color.White)
                             Text(
@@ -269,6 +292,29 @@ fun FileBrowserScreen(
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Left icon: folder for directories, thumbnail for audio, default if none
+                        if (fileItem.isDirectory) {
+                            Icon(imageVector = Icons.Filled.Folder, contentDescription = "Folder", tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        } else if (fileItem.isAudio) {
+                            val ctx = LocalContext.current
+                            val uriString = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
+                            var embeddedBitmap by remember(uriString) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                            LaunchedEffect(uriString) {
+                                embeddedBitmap = try { com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, uriString) } catch (_: Exception) { null }
+                            }
+                            if (embeddedBitmap != null) {
+                                Image(bitmap = embeddedBitmap!!, contentDescription = "Artwork", modifier = Modifier.size(48.dp).clip(CircleShape))
+                            } else {
+                                Image(painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(48.dp).clip(CircleShape))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        } else {
+                            // fallback for other file types
+                            Icon(imageVector = Icons.Filled.Folder, contentDescription = "File", tint = Color.LightGray)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+
                         Column(modifier = Modifier.weight(1f)) {
                             Text(fileItem.name, color = Color.White)
                         }
