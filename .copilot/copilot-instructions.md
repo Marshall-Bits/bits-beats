@@ -16,6 +16,10 @@ Checklist (qué incluye este archivo)
 - [x] Librerías actuales detectadas y recomendaciones de reemplazo/versión
 - [x] Pruebas, lint, CI y mantenimiento
 - [x] Reglas de estilo y naming (breve)
+ 
+Reglas operativas
+- Nunca eliminar imports: no borrar automáticamente líneas de import durante refactors o limpiezas; si un import parece no usado, revisarlo manualmente (asegurar que no rompe referencias en otros ficheros) y eliminarlo solo tras comprobar que el proyecto compila.
+- Comprobación obligatoria antes de finalizar una tarea: siempre ejecutar una verificación de errores (por ejemplo `get_errors` o un `Gradle build`) y confirmar que no quedan errores de compilación o importación antes de cerrar la tarea o hacer merge.
 
 1) Estructura de ficheros y paquetes recomendada
 - Raíz: `app/src/main/java/com/example/bitsbeats/`

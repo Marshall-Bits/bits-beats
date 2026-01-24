@@ -1,10 +1,13 @@
 package com.example.bitsbeats.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Pause
@@ -19,17 +22,21 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bitsbeats.ui.components.PlaybackController
 import com.example.bitsbeats.util.formatDuration
+import kotlinx.coroutines.isActive
 
 @Composable
 fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
@@ -63,8 +70,31 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(24.dp)) {
-            Box(modifier = Modifier.size(200.dp).clip(CircleShape).background(Color.Gray), contentAlignment = Alignment.Center) {
-                Icon(imageVector = Icons.Filled.Album, contentDescription = "Album", modifier = Modifier.size(180.dp), tint = Color.White)
+            // Album artwork: use Animatable so rotation preserves position on pause and resets on track change
+            val currentUri = PlaybackController.currentUri
+            val rotationAnim = remember { Animatable(0f) }
+
+            // Reset rotation when a new track starts (observe both URI and title to be robust)
+            LaunchedEffect(currentUri, title) {
+                rotationAnim.snapTo(0f)
+            }
+
+            // When playing, animate continuously in +360 steps; when paused the coroutine cancels and value is preserved
+            LaunchedEffect(isPlaying, currentUri) {
+                if (isPlaying) {
+                    while (isActive && PlaybackController.isPlaying) {
+                        val target = rotationAnim.value + 360f
+                        rotationAnim.animateTo(target, animationSpec = tween(durationMillis = 8000, easing = LinearEasing))
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.size(200.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
+                Image(
+                    painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
+                    contentDescription = "Album",
+                    modifier = Modifier.size(180.dp).rotate(rotationAnim.value % 360f)
+                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
