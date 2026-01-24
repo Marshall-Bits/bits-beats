@@ -185,9 +185,17 @@ object PlaybackController {
                 context.contentResolver.query(uri, arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c ->
                     if (c.moveToFirst()) {
                         title = c.getString(0) ?: title
-                        artist = c.getString(1) ?: artist
+                        val rawArtist = c.getString(1)
+                        artist = if (rawArtist.isNullOrBlank() || rawArtist == "<unknown>") "" else rawArtist
                         duration = c.getLong(2)
                     }
+                }
+                // fallback: if title still blank, try to derive a filename from the uri
+                if (title.isBlank() || title == "Sin canción") {
+                    try {
+                        val path = uri.path
+                        if (!path.isNullOrBlank()) title = java.io.File(path).name
+                      } catch (_: Exception) {}
                 }
             } catch (_: Exception) {}
 
@@ -340,11 +348,24 @@ object PlaybackController {
             // prepare media and position, but DO NOT auto-start playback on app open
             try {
                 val uri = queue[queueIndex].toUri()
+                // Attempt to read metadata (title/artist/duration) so UI shows correct info on restore
+                try {
+                    context.contentResolver.query(uri, arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c ->
+                        if (c.moveToFirst()) {
+                            title = c.getString(0) ?: title
+                            val rawArtist = c.getString(1)
+                            artist = if (rawArtist.isNullOrBlank() || rawArtist == "<unknown>") "" else rawArtist
+                            duration = c.getLong(2)
+                        }
+                    }
+                } catch (_: Exception) {}
+
                 mediaPlayer?.release()
                 mediaPlayer = MediaPlayer()
                 context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd -> mediaPlayer?.setDataSource(pfd.fileDescriptor) }
                 mediaPlayer?.prepare()
-                duration = mediaPlayer?.duration?.toLong() ?: 0L
+                // prefer duration from mediaPlayer if available
+                duration = mediaPlayer?.duration?.toLong() ?: duration
                 if (pos > 0) mediaPlayer?.seekTo(pos.toInt())
                 currentPosition = pos
                 currentUri = queue[queueIndex]
