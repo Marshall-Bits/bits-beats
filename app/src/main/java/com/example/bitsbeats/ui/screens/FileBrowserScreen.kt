@@ -1,4 +1,4 @@
-package com.example.bitsbeats
+package com.example.bitsbeats.ui.screens
 
 import android.Manifest
 import android.content.ContentUris
@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +47,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.bitsbeats.AudioFile
+import com.example.bitsbeats.FileItem
+import com.example.bitsbeats.PlaylistStore
+import com.example.bitsbeats.getDirectoryContents
+import com.example.bitsbeats.getRecentAudioFiles
+import com.example.bitsbeats.queryAudioIdFromPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -68,7 +75,7 @@ fun FileBrowserScreen(
     var hasPermission by remember { mutableStateOf(false) }
 
     // cache mapping from file path -> MediaStore audio id (nullable)
-    val pathToId = remember { androidx.compose.runtime.mutableStateMapOf<String, Long?>() }
+    val pathToId = remember { mutableStateMapOf<String, Long?>() }
 
     DisposableEffect(Unit) { onDispose { /* nothing local to release */ } }
 

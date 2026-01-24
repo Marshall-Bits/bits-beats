@@ -1,4 +1,4 @@
-package com.example.bitsbeats
+package com.example.bitsbeats.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,6 +29,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.bitsbeats.PlaylistStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("UNUSED_PARAMETER")
@@ -107,7 +110,7 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
         // Confirm delete dialog
         if (playlistToDelete != null) {
             val nameToDelete = playlistToDelete!!
-            androidx.compose.material3.AlertDialog(
+            AlertDialog(
                 onDismissRequest = { playlistToDelete = null },
                 title = { Text("Eliminar playlist") },
                 text = { Text("¿Eliminar la playlist '$nameToDelete'? Esta acción no se puede deshacer.") },
@@ -127,11 +130,11 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
 
         // Create playlist dialog (restored)
         if (showingDialog) {
-            androidx.compose.material3.AlertDialog(
+            AlertDialog(
                 onDismissRequest = { showingDialog = false },
                 title = { Text("Nombre de la playlist") },
                 text = {
-                    androidx.compose.material3.TextField(value = newName, onValueChange = { newName = it }, placeholder = { Text("Nombre") })
+                    TextField(value = newName, onValueChange = { newName = it }, placeholder = { Text("Nombre") })
                 },
                 confirmButton = {
                     Button(onClick = {
@@ -156,11 +159,11 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
         // Edit name dialog
         if (editingName != null) {
             val original = editingName!!
-            androidx.compose.material3.AlertDialog(
+            AlertDialog(
                 onDismissRequest = { editingName = null },
                 title = { Text("Editar nombre") },
                 text = {
-                    androidx.compose.material3.TextField(value = editText, onValueChange = { editText = it }, placeholder = { Text("Nuevo nombre") })
+                    TextField(value = editText, onValueChange = { editText = it }, placeholder = { Text("Nuevo nombre") })
                 },
                 confirmButton = {
                     Button(onClick = {

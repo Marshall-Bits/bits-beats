@@ -1,23 +1,14 @@
 package com.example.bitsbeats
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentResolver
-import android.content.ContentUris
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.provider.MediaStore
-import android.widget.Toast
 import java.net.URLEncoder
 import java.net.URLDecoder
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -35,72 +26,38 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.layout.width
 import androidx.compose.ui.zIndex
-import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.bitsbeats.ui.theme.BitsBeatsTheme
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.File
-import androidx.core.content.edit
+import com.example.bitsbeats.ui.screens.FileBrowserScreen
+import com.example.bitsbeats.ui.screens.PlayerScreen
+import com.example.bitsbeats.ui.screens.PlaylistDetailScreen
+import com.example.bitsbeats.ui.screens.PlaylistScreen
 
 // Data class para representar un archivo de audio
 data class AudioFile(
@@ -202,13 +159,27 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("filebrowser") {
-                            FileBrowserScreen(onFileSelected = { audioId -> PlaybackController.playAudioId(appContext, audioId) }, onNavigateBack = { navController.popBackStack() })
+                            FileBrowserScreen(onFileSelected = { audioId ->
+                                PlaybackController.playAudioId(
+                                    appContext,
+                                    audioId
+                                )
+                            }, onNavigateBack = { navController.popBackStack() })
                         }
 
                         composable("filebrowser/{addTo}") { backStackEntry ->
                             val encoded = backStackEntry.arguments?.getString("addTo") ?: ""
                             val playlistName = try { URLDecoder.decode(encoded, "UTF-8") } catch (_: Exception) { encoded }
-                            FileBrowserScreen(onFileSelected = { audioId -> PlaybackController.playAudioId(appContext, audioId) }, onNavigateBack = { navController.popBackStack() }, addToPlaylistName = playlistName)
+                            FileBrowserScreen(
+                                onFileSelected = { audioId ->
+                                    PlaybackController.playAudioId(
+                                        appContext,
+                                        audioId
+                                    )
+                                },
+                                onNavigateBack = { navController.popBackStack() },
+                                addToPlaylistName = playlistName
+                            )
                         }
                     }
 
@@ -386,92 +357,6 @@ fun queryAudioIdFromPath(contentResolver: ContentResolver, filePath: String): Lo
         }
     }
     return null
-}
-
-// Playlist storage helpers (simple JSON in SharedPreferences)
-object PlaylistStore {
-    private const val PREFS = "bitsbeats_prefs"
-    private const val KEY_PLAYLISTS = "playlists_json"
-
-    // Format: JSON object { "playlistName": [ {"uri": "...", "title":"...","artist":"...","duration":12345}, ... ], ... }
-    fun loadAll(context: Context): Map<String, List<Map<String, Any>>> {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val s = prefs.getString(KEY_PLAYLISTS, null) ?: return emptyMap()
-        return try {
-            val root = JSONObject(s)
-            val result = mutableMapOf<String, List<Map<String, Any>>>()
-            root.keys().forEach { name ->
-                val arr = root.optJSONArray(name) ?: return@forEach
-                val list = mutableListOf<Map<String, Any>>()
-                for (i in 0 until arr.length()) {
-                    val obj = arr.optJSONObject(i) ?: continue
-                    val map = mutableMapOf<String, Any>()
-                    map["uri"] = obj.optString("uri")
-                    map["title"] = obj.optString("title")
-                    map["artist"] = obj.optString("artist")
-                    map["duration"] = obj.optLong("duration", 0L)
-                    list.add(map)
-                }
-                result[name] = list
-            }
-            result
-        } catch (_: Exception) { emptyMap() }
-    }
-
-    private fun saveAll(context: Context, data: Map<String, List<Map<String, Any>>>) {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val root = JSONObject()
-        data.forEach { (k, v) ->
-            val arr = org.json.JSONArray()
-            v.forEach { item ->
-                val obj = JSONObject()
-                obj.put("uri", item["uri"] ?: "")
-                obj.put("title", item["title"] ?: "")
-                obj.put("artist", item["artist"] ?: "")
-                obj.put("duration", item["duration"] ?: 0L)
-                arr.put(obj)
-            }
-            root.put(k, arr)
-        }
-        prefs.edit { putString(KEY_PLAYLISTS, root.toString()) }
-    }
-
-    fun createPlaylist(context: Context, name: String): Boolean {
-        val all = loadAll(context).toMutableMap()
-        if (all.containsKey(name)) return false
-        all[name] = emptyList()
-        saveAll(context, all)
-        return true
-    }
-
-    fun deletePlaylist(context: Context, name: String) {
-        val all = loadAll(context).toMutableMap()
-        all.remove(name)
-        saveAll(context, all)
-    }
-
-    fun renamePlaylist(context: Context, oldName: String, newName: String): Boolean {
-        val all = loadAll(context).toMutableMap()
-        if (!all.containsKey(oldName)) return false
-        if (all.containsKey(newName)) return false
-        val value = all.remove(oldName) ?: emptyList()
-        all[newName] = value
-        saveAll(context, all)
-        return true
-    }
-
-    fun addItemToPlaylist(context: Context, playlistName: String, uri: String, title: String, artist: String, duration: Long) {
-        val all = loadAll(context).toMutableMap()
-        val list = all[playlistName]?.toMutableList() ?: mutableListOf()
-        val item = mapOf("uri" to uri, "title" to title, "artist" to artist, "duration" to duration)
-        list.add(item)
-        all[playlistName] = list
-        saveAll(context, all)
-    }
-
-    fun getPlaylist(context: Context, name: String): List<Map<String, Any>> {
-        return loadAll(context)[name] ?: emptyList()
-    }
 }
 
 @Preview(showBackground = true)

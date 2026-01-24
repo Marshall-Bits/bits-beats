@@ -1,4 +1,4 @@
-package com.example.bitsbeats
+package com.example.bitsbeats.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -33,6 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.bitsbeats.PlaybackController
+import com.example.bitsbeats.PlaylistStore
+import com.example.bitsbeats.formatDuration
 
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
 @OptIn(ExperimentalMaterial3Api::class)

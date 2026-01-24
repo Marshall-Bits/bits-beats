@@ -1,4 +1,4 @@
-package com.example.bitsbeats
+package com.example.bitsbeats.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,14 +20,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.bitsbeats.PlaybackController
+import com.example.bitsbeats.formatDuration
 
 @Composable
 fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
     // When navigated with an audioId play it; if -1 restore last
     LaunchedEffect(audioId) {
