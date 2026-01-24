@@ -148,7 +148,8 @@ class MainActivity : ComponentActivity() {
                             }
                             PlaylistDetailScreen(
                                 playlistName = id,
-                                onBack = { navController.popBackStack() },
+                                // navigate to the playlists list (route without parameter) when pressing back
+                                onBackToList = { navController.navigate("playlistDetail") },
                                 onAddSongs = {
                                     val enc = URLEncoder.encode(id, "UTF-8")
                                     navController.navigate("filebrowser/$enc")

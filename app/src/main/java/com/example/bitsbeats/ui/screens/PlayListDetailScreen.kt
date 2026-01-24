@@ -40,7 +40,12 @@ import com.example.bitsbeats.util.formatDuration
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaylistDetailScreen(playlistName: String, onBack: () -> Unit = {}, onAddSongs: () -> Unit = {}) {
+fun PlaylistDetailScreen(
+    playlistName: String,
+    onAddSongs: () -> Unit = {},
+    // new callback: navigate back to the playlists list directly
+    onBackToList: () -> Unit = {}
+) {
     val context = LocalContext.current
     var items by remember { mutableStateOf(PlaylistStore.getPlaylist(context, playlistName)) }
 
@@ -63,7 +68,7 @@ fun PlaylistDetailScreen(playlistName: String, onBack: () -> Unit = {}, onAddSon
     }
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color.DarkGray)) {
-        TopAppBar(title = { Text(text = playlistName, color = Color.White) }, navigationIcon = { IconButton(onClick = onBack) { Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D)))
+        TopAppBar(title = { Text(text = playlistName, color = Color.White) }, navigationIcon = { IconButton(onClick = { onBackToList() }) { Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Atrás", tint = Color.White) } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D2D2D)))
 
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Button(onClick = {
