@@ -51,8 +51,16 @@ object PlaybackController {
     /** Play a list of URIs as a queue starting at [startIndex]. This replaces any existing queue. */
     fun playQueue(context: Context, uris: List<String>, startIndex: Int = 0) {
         if (uris.isEmpty()) return
-        queue = uris
-        queueIndex = startIndex.coerceIn(0, uris.size - 1)
+        // If shuffle is enabled, build a shuffled queue keeping the selected item first
+        if (shuffleEnabled) {
+            val selected = uris.getOrNull(startIndex.coerceIn(0, uris.size - 1))
+            val rest = uris.filter { it != selected }.shuffled()
+            queue = if (selected != null) listOf(selected) + rest else uris.shuffled()
+            queueIndex = 0
+        } else {
+            queue = uris
+            queueIndex = startIndex.coerceIn(0, uris.size - 1)
+        }
         appContext = context.applicationContext
         saveState(context) // persist queue immediately
         playCurrentFromQueue()
@@ -252,6 +260,7 @@ object PlaybackController {
                 put("position", currentPosition)
                 put("isPlaying", isPlaying)
                 put("repeatMode", repeatMode.name)
+                put("shuffleEnabled", shuffleEnabled)
                 put("updatedAt", System.currentTimeMillis())
             }
             prefs.edit { putString(KEY_LAST_STATE, json.toString()) }
@@ -275,7 +284,7 @@ object PlaybackController {
             val pos = json.optLong("position", 0L)
             val repeatStr = json.optString("repeatMode", "OFF")
             repeatMode = try { RepeatMode.valueOf(repeatStr) } catch (_: Exception) { RepeatMode.OFF }
-            // val wasPlaying = json.optBoolean("isPlaying", false)
+            shuffleEnabled = json.optBoolean("shuffleEnabled", false)
 
             // set state
             queue = uris
@@ -335,6 +344,21 @@ object PlaybackController {
     /** Set repeat mode explicitly (renamed to avoid JVM signature clash with generated property setter) */
     fun applyRepeatMode(mode: RepeatMode) {
         repeatMode = mode
+        appContext?.let { saveState(it) }
+    }
+
+    // shuffle flag
+    var shuffleEnabled by mutableStateOf(false)
+
+    fun toggleShuffle() {
+        shuffleEnabled = !shuffleEnabled
+        // if enabling shuffle and we have a queue, reshuffle remaining while keeping current
+        if (shuffleEnabled && queue.isNotEmpty()) {
+            val current = if (queueIndex in queue.indices) queue[queueIndex] else queue.firstOrNull()
+            val rest = queue.filter { it != current }.shuffled()
+            queue = if (current != null) listOf(current) + rest else rest
+            queueIndex = 0
+        }
         appContext?.let { saveState(it) }
     }
 }

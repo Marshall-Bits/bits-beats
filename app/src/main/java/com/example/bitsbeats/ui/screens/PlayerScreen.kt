@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -85,29 +86,40 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                // Repeat toggle: OFF -> REPEAT_ALL -> REPEAT_ONE
+            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Shuffle on the left
+                val shuffleOn = PlaybackController.shuffleEnabled
+                val shuffleTint = if (shuffleOn) Color(0xFF1DB954) else Color.White
+                IconButton(onClick = { PlaybackController.toggleShuffle() }, modifier = Modifier.size(48.dp)) {
+                    Icon(imageVector = Icons.Filled.Shuffle, contentDescription = "Shuffle", modifier = Modifier.size(28.dp), tint = shuffleTint)
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Center controls
+                Row(modifier = Modifier.width(240.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { PlaybackController.prevTrack() }, modifier = Modifier.size(64.dp)) {
+                        Icon(Icons.Filled.ChevronLeft, contentDescription = "Canción anterior", modifier = Modifier.size(48.dp), tint = Color.White)
+                    }
+
+                    IconButton(onClick = { PlaybackController.togglePlayPause() }, modifier = Modifier.size(80.dp)) {
+                        Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", modifier = Modifier.size(64.dp), tint = Color.White)
+                    }
+
+                    IconButton(onClick = { PlaybackController.nextTrack() }, modifier = Modifier.size(64.dp)) {
+                        Icon(Icons.Filled.ChevronRight, contentDescription = "Siguiente canción", modifier = Modifier.size(48.dp), tint = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Repeat on the right
                 val repeatMode = PlaybackController.repeatMode
                 val repeatActive = repeatMode != com.example.bitsbeats.ui.components.PlaybackController.RepeatMode.OFF
                 val repeatIcon = if (repeatMode == com.example.bitsbeats.ui.components.PlaybackController.RepeatMode.REPEAT_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat
                 val repeatTint = if (repeatActive) Color(0xFF1DB954) else Color.White
                 IconButton(onClick = { PlaybackController.toggleRepeatMode() }, modifier = Modifier.size(48.dp)) {
                     Icon(imageVector = repeatIcon, contentDescription = "Repeat mode", modifier = Modifier.size(28.dp), tint = repeatTint)
-                }
-
-                // Previous track
-                IconButton(onClick = { PlaybackController.prevTrack() }, modifier = Modifier.size(64.dp)) {
-                    Icon(Icons.Filled.ChevronLeft, contentDescription = "Canción anterior", modifier = Modifier.size(48.dp), tint = Color.White)
-                }
-
-                // Play / Pause
-                IconButton(onClick = { PlaybackController.togglePlayPause() }, modifier = Modifier.size(80.dp)) {
-                    Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", modifier = Modifier.size(64.dp), tint = Color.White)
-                }
-
-                // Next track
-                IconButton(onClick = { PlaybackController.nextTrack() }, modifier = Modifier.size(64.dp)) {
-                    Icon(Icons.Filled.ChevronRight, contentDescription = "Siguiente canción", modifier = Modifier.size(48.dp), tint = Color.White)
                 }
             }
         }
