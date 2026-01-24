@@ -27,14 +27,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,6 +51,7 @@ import com.example.bitsbeats.ui.components.PlaybackController
 import com.example.bitsbeats.ui.theme.BitsBeatsTheme
 import java.io.File
 import com.example.bitsbeats.ui.screens.FileBrowserScreen
+import com.example.bitsbeats.ui.screens.HomeScreen
 import com.example.bitsbeats.ui.screens.PlayerScreen
 import com.example.bitsbeats.ui.screens.PlaylistDetailScreen
 import com.example.bitsbeats.ui.screens.PlaylistScreen
@@ -247,8 +243,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
-
 // Función para obtener los últimos 10 archivos de audio del sistema (solo música real)
 fun getRecentAudioFiles(contentResolver: ContentResolver): List<AudioFile> {
     val audioFiles = mutableListOf<AudioFile>()
@@ -365,73 +359,5 @@ fun queryAudioIdFromPath(contentResolver: ContentResolver, filePath: String): Lo
 fun HomeScreenPreview() {
     BitsBeatsTheme {
         HomeScreen(onNavigateToPlayer = {}, onNavigateToPlaylist = {})
-    }
-}
-
-@Composable
-fun HomeScreen(onNavigateToPlayer: () -> Unit, onNavigateToPlaylist: () -> Unit, onNavigateToFileBrowser: () -> Unit = {}) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.DarkGray),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "Bits Beats",
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(32.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Botón de reproducción
-                IconButton(
-                    onClick = onNavigateToPlayer,
-                    modifier = Modifier.size(100.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Album,
-                        contentDescription = "Ir a reproducción",
-                        modifier = Modifier.size(80.dp),
-                        tint = Color.White
-                    )
-                }
-
-                // Botón de playlist
-                IconButton(
-                    onClick = onNavigateToPlaylist,
-                    modifier = Modifier.size(100.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "Ir a playlist",
-                        modifier = Modifier.size(80.dp),
-                        tint = Color.White
-                    )
-                }
-
-                // Botón de explorador de archivos
-                IconButton(
-                    onClick = onNavigateToFileBrowser,
-                    modifier = Modifier.size(100.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Folder,
-                        contentDescription = "Explorar archivos",
-                        modifier = Modifier.size(80.dp),
-                        tint = Color.White
-                    )
-                }
-            }
-        }
     }
 }
