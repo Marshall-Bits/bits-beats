@@ -268,3 +268,27 @@ imageLauncher.launch(arrayOf("image/*"))
  - Fallback y errores:
    - Si la extracción falla por permisos o formato, registrar el fallo (Log) y mostrar `song_default` sin overlay.
    - No lanzar excepciones hacia la UI.
+
+
+### Iconos 
+- La librería de iconos utilizada es `androidx.compose.material.icons`. No debemos usar otras librerías de iconos externas ya que muchas están sin mantener o no son compatibles con Compose.
+Ejemplos de iconos `androidx.compose.material.icons`:
+- **PlayListDetailScreen.kt**:
+  - `Icons.Filled.ArrowBack`
+  - `Icons.Filled.Delete`
+  - `Icons.Filled.Edit`
+  - `Icons.Filled.Image`
+  - `Icons.Filled.MoreVert`
+- **PlayerScreen.kt**:
+  - `Icons.Filled.ChevronLeft`
+  - `Icons.Filled.ChevronRight`
+  - `Icons.Filled.Pause`
+  - `Icons.Filled.PlayArrow`
+  - `Icons.Filled.Repeat`
+  - `Icons.Filled.RepeatOne`
+  - `Icons.Filled.Shuffle`
+- **PlayerListScreen.kt**:
+  - `Icons.Filled.Add`
+  - `Icons.Filled.Delete`
+  - `Icons.Filled.Edit`
+  - `Icons.Filled.MoreVert`
