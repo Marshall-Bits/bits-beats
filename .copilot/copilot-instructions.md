@@ -112,6 +112,10 @@ APIs a evitar / obsoletas / notas
 - Evitar usar file-system absolute paths y manipular `Environment.getExternalStorageDirectory()` (scoped storage). Usa Storage Access Framework o MediaStore + SAF.
 - Evitar dependencias antiguas de soporte libs; usar AndroidX actualizadas.
 
+8) Imágenes default
+- Canción: `res.drawable.song_default`` (imagen genérica para pistas sin artwork).`
+- Playlist: `res.drawable.playlist_default` (imagen genérica para playlists sin imagen asociada).
+
 10) Reglas de estilo y convenciones (breve)
 - Nombre de ficheros: `XxxScreen.kt`, `XxxViewModel.kt`, `PlaybackController.kt`, `MediaRepository.kt`.
 - Cada archivo contiene una responsabilidad única (single responsibility). Mantener composables pequeños (<200 LOC si es posible).

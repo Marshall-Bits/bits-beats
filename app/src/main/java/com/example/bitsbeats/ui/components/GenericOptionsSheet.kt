@@ -60,6 +60,7 @@ data class GenericOptionItem(
     val label: String,
     val icon: ImageVector? = null,
     val leadingImageUri: String? = null,
+    val defaultLeadingPainterResourceId: Int? = null,
     val iconTint: Color = Color.White,
     val rowClickable: Boolean = true,
     val onClick: () -> Unit,
@@ -149,6 +150,8 @@ fun GenericOptionsSheet(
                             ) {
                                 if (leadBitmap != null) {
                                     Image(bitmap = leadBitmap!!, contentDescription = opt.label, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
+                                } else if (opt.defaultLeadingPainterResourceId != null) {
+                                    Image(painter = painterResource(id = opt.defaultLeadingPainterResourceId), contentDescription = opt.label, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
                                 } else if (opt.icon != null) {
                                     Icon(imageVector = opt.icon, contentDescription = opt.label, tint = opt.iconTint)
                                 }

@@ -812,6 +812,7 @@ fun FileBrowserScreen(
                                 GenericOptionItem(
                                     label = p,
                                     leadingImageUri = PlaylistStore.getPlaylistImage(context, p),
+                                    defaultLeadingPainterResourceId = com.example.bitsbeats.R.drawable.playlist_default,
                                     rowClickable = false,
                                     onClick = {},
                                     trailingContent = {
