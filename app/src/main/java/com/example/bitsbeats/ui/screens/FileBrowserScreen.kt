@@ -41,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.SdCard
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
 import androidx.core.content.ContextCompat
 import com.example.bitsbeats.data.AudioFile
 import com.example.bitsbeats.data.FileItem
@@ -76,7 +78,8 @@ import com.example.bitsbeats.data.FileRepository.getDirectoryContents
 import com.example.bitsbeats.data.MediaRepository.getRecentAudioFiles
 import com.example.bitsbeats.data.MediaRepository.queryAudioIdFromPath
 import com.example.bitsbeats.ui.components.PlaylistStore
-import com.example.bitsbeats.ui.components.OptionsMenuSheet
+import com.example.bitsbeats.ui.components.GenericOptionsSheet
+import com.example.bitsbeats.ui.components.GenericOptionItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -787,59 +790,47 @@ fun FileBrowserScreen(
                 )
             }
 
-            // Dialog for adding single song to playlist
+            // Playlist picker implemented with GenericOptionsSheet: includes top 'Crear nueva playlist' and list of existing playlists with trailing + button
             if (showAddToPlaylistDialog) {
-                AlertDialog(
-                    onDismissRequest = { showAddToPlaylistDialog = false },
-                    title = { Text("Añadir a la playlist") },
-                    text = {
-                        if (playlists.isEmpty()) {
-                            Column {
-                                Text("No tienes playlists. Puedes crear una nueva:")
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = {
-                                    showCreatePlaylistForSingleDialog = true
-                                }) { Text("Crear nueva playlist") }
-                            }
-                        } else {
-                            Column {
-                                Text("Selecciona una playlist:")
-                                Spacer(modifier = Modifier.height(8.dp))
-                                playlists.forEach { p ->
-                                    Button(
-                                        onClick = {
+                GenericOptionsSheet(
+                    visible = showAddToPlaylistDialog,
+                    onDismiss = { showAddToPlaylistDialog = false },
+                    headerContent = {
+                        // title
+                        Text(text = "Añadir a la playlist", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    },
+                    options = buildList {
+                        // create-new option (non-clickable row that triggers the create dialog when clicked)
+                        add(GenericOptionItem(label = "Crear nueva playlist", icon = Icons.Filled.Add, onClick = {
+                            showCreatePlaylistForSingleDialog = true
+                        }))
+
+                        // playlist entries: show leading image if available and a trailing plus button
+                        playlists.forEach { p ->
+                            add(
+                                GenericOptionItem(
+                                    label = p,
+                                    leadingImageUri = PlaylistStore.getPlaylistImage(context, p),
+                                    rowClickable = false,
+                                    onClick = {},
+                                    trailingContent = {
+                                        androidx.compose.material3.IconButton(onClick = {
                                             try {
                                                 val uri = selectedAudioUri ?: ""
-                                                PlaylistStore.addItemToPlaylist(
-                                                    context,
-                                                    p,
-                                                    uri,
-                                                    selectedAudioTitle,
-                                                    selectedAudioArtist,
-                                                    selectedAudioDuration
-                                                )
-                                                Toast.makeText(
-                                                    context,
-                                                    "Añadida a '$p'",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            } catch (_: Exception) {
-                                            }
+                                                PlaylistStore.addItemToPlaylist(context, p, uri, selectedAudioTitle, selectedAudioArtist, selectedAudioDuration)
+                                                Toast.makeText(context, "Añadida a '$p'", Toast.LENGTH_SHORT).show()
+                                            } catch (_: Exception) { }
                                             showAddToPlaylistDialog = false
-                                        },
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                    ) { Text(p) }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = { showCreatePlaylistForSingleDialog = true },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Crear nueva playlist") }
-                            }
+                                        }) {
+                                            Box(modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), shape = androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                                                androidx.compose.material3.Icon(imageVector = Icons.Filled.Add, contentDescription = "Añadir")
+                                            }
+                                        }
+                                    }
+                                )
+                            )
                         }
-                    },
-                    confirmButton = {
-                        Button(onClick = { showAddToPlaylistDialog = false }) { Text("Cerrar") }
                     }
                 )
             }
@@ -902,17 +893,38 @@ fun FileBrowserScreen(
             }
         }
 
-        // Use the new OptionsMenuSheet component from ui.components
-        OptionsMenuSheet(
+        // Reusable generic options sheet (header + options)
+        GenericOptionsSheet(
             visible = showOptionsMenu,
             onDismiss = { showOptionsMenu = false },
-            selectedAudioUri = selectedAudioUri,
-            selectedAudioTitle = selectedAudioTitle,
-            selectedAudioArtist = selectedAudioArtist,
-            onAddToPlaylistRequested = {
-                playlists = PlaylistStore.loadAll(context).keys.toList()
-                showAddToPlaylistDialog = true
-                showOptionsMenu = false
-            }
+            headerContent = {
+                // artwork + metadata header (load embedded artwork asynchronously using loadEmbeddedArtwork)
+                val ctx = LocalContext.current
+                var headerBitmap by remember(selectedAudioUri) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                LaunchedEffect(selectedAudioUri) {
+                    headerBitmap = try {
+                        com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, selectedAudioUri)
+                    } catch (_: Exception) { null }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (headerBitmap != null) {
+                        Image(bitmap = headerBitmap!!, contentDescription = "Artwork", modifier = Modifier.size(64.dp).clip(CircleShape))
+                    } else {
+                        Image(painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(64.dp))
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(selectedAudioTitle.ifEmpty { "Sin título" }, color = Color.White)
+                        Text(selectedAudioArtist.ifEmpty { "Artista desconocido" }, color = Color.LightGray)
+                    }
+                }
+            },
+            options = listOf(
+                GenericOptionItem(label = "Añadir a playlist", icon = Icons.AutoMirrored.Filled.PlaylistAdd, onClick = {
+                    playlists = PlaylistStore.loadAll(context).keys.toList()
+                    showAddToPlaylistDialog = true
+                })
+            )
         )
     }}

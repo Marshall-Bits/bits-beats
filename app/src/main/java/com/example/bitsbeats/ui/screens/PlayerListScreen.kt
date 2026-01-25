@@ -1,6 +1,10 @@
 package com.example.bitsbeats.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -24,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -53,10 +59,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.bitsbeats.R
+import com.example.bitsbeats.ui.components.GenericOptionItem
+import com.example.bitsbeats.ui.components.GenericOptionsSheet
 import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.ui.components.PlaybackController
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.draw.clip
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("UNUSED_PARAMETER")
@@ -70,8 +79,24 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
     var playlistToDelete by remember { mutableStateOf<String?>(null) }
     // menu state for per-row options
     var menuFor by remember { mutableStateOf<String?>(null) }
+    var selectedMenuPlaylist by remember { mutableStateOf<String?>(null) }
+    var showPlaylistOptions by remember { mutableStateOf(false) }
     var editingName by remember { mutableStateOf<String?>(null) }
     var editText by remember { mutableStateOf("") }
+
+    // image picker for modifying playlist image
+    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) { }
+            val target = selectedMenuPlaylist
+            if (target != null) {
+                PlaylistStore.setPlaylistImage(context, target, it.toString())
+                playlists = PlaylistStore.loadAll(context).keys.toList()
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         playlists = PlaylistStore.loadAll(context).keys.toList()
@@ -156,13 +181,8 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                                     Text(text = name, color = Color.White, modifier = Modifier.weight(1f), fontSize = 14.sp)
 
                                     Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
-                                        IconButton(onClick = { menuFor = if (menuFor == name) null else name }) {
+                                        IconButton(onClick = { selectedMenuPlaylist = name; showPlaylistOptions = true }) {
                                             Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones", tint = Color.White)
-                                        }
-
-                                        DropdownMenu(expanded = (menuFor == name), onDismissRequest = { menuFor = null }) {
-                                            DropdownMenuItem(text = { Text("Edit name") }, leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null, tint = Color.White) }, onClick = { editingName = name; editText = name; menuFor = null })
-                                            DropdownMenuItem(text = { Text("Delete playlist") }, leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = Color.White) }, onClick = { playlistToDelete = name; menuFor = null })
                                         }
                                     }
                                 }
@@ -258,6 +278,56 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                 dismissButton = {
                     Button(onClick = { editingName = null }) { Text("Cancelar") }
                 }
+            )
+        }
+
+        // Generic options sheet for playlist actions (edit name / modify image / delete)
+        if (showPlaylistOptions) {
+            GenericOptionsSheet(
+                visible = showPlaylistOptions,
+                onDismiss = { showPlaylistOptions = false; selectedMenuPlaylist = null },
+                headerContent = {
+                    val p = selectedMenuPlaylist ?: ""
+                    val imgUri = PlaylistStore.getPlaylistImage(context, p)
+                    val headerBmp = produceState(initialValue = null as androidx.compose.ui.graphics.ImageBitmap?, imgUri) {
+                        value = null
+                        try {
+                            if (!imgUri.isNullOrBlank()) {
+                                val u = imgUri.toUri()
+                                context.contentResolver.openInputStream(u)?.use { stream ->
+                                    val bmp = android.graphics.BitmapFactory.decodeStream(stream)
+                                    value = bmp?.asImageBitmap()
+                                }
+                            }
+                        } catch (_: Exception) { value = null }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (headerBmp.value != null) {
+                            Image(bitmap = headerBmp.value!!, contentDescription = "Playlist image", modifier = Modifier.size(64.dp).clip(RoundedCornerShape(4.dp)))
+                        } else {
+                            Image(painter = painterResource(id = R.drawable.playlist_default), contentDescription = "Playlist image", modifier = Modifier.size(64.dp))
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text = p, color = Color.White)
+                    }
+                },
+                options = listOf(
+                    GenericOptionItem(label = "Editar nombre", icon = Icons.Filled.Edit, onClick = {
+                        editingName = selectedMenuPlaylist
+                        editText = selectedMenuPlaylist ?: ""
+                        showPlaylistOptions = false
+                    }),
+                    GenericOptionItem(label = "Modificar imagen", icon = Icons.Filled.Image, onClick = {
+                        // launch image picker; keep selectedMenuPlaylist set
+                        imageLauncher.launch(arrayOf("image/*"))
+                        showPlaylistOptions = false
+                    }),
+                    GenericOptionItem(label = "Eliminar playlist", icon = Icons.Filled.Delete, iconTint = Color(0xFFFF6B6B), onClick = {
+                        playlistToDelete = selectedMenuPlaylist
+                        showPlaylistOptions = false
+                    })
+                )
             )
         }
     }

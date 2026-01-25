@@ -1,5 +1,6 @@
 package com.example.bitsbeats.ui.components
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,9 +39,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.window.Dialog
@@ -51,13 +54,16 @@ import androidx.compose.animation.core.Animatable
 
 /**
  * GenericOptionsSheet: reusable bottom sheet with overlay, handle, stretchable behaviour,
- * and a list of option items (icon + label + callback).
+ * and a list of option items. Supports optional leading image URI and trailing content per item.
  */
 data class GenericOptionItem(
     val label: String,
-    val icon: ImageVector,
+    val icon: ImageVector? = null,
+    val leadingImageUri: String? = null,
     val iconTint: Color = Color.White,
-    val onClick: () -> Unit
+    val rowClickable: Boolean = true,
+    val onClick: () -> Unit,
+    val trailingContent: (@Composable (() -> Unit))? = null
 )
 
 @Composable
@@ -72,6 +78,7 @@ fun GenericOptionsSheet(
     val config = LocalConfiguration.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
 
     val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
     val topMarginPx = with(density) { 48.dp.toPx() }
@@ -79,9 +86,7 @@ fun GenericOptionsSheet(
     val maxHeightPx = (screenHeightPx - topMarginPx).coerceAtLeast(minHeightPx)
 
     val sheetHeightPx = remember { Animatable(minHeightPx) }
-    val sheetHeightDp = remember {
-        derivedStateOf { with(density) { sheetHeightPx.value.toDp() } }
-    }
+    val sheetHeightDp = remember { derivedStateOf { with(density) { sheetHeightPx.value.toDp() } } }
 
     LaunchedEffect(visible) {
         if (visible) scope.launch { sheetHeightPx.snapTo(minHeightPx) }
@@ -89,23 +94,11 @@ fun GenericOptionsSheet(
 
     Dialog(onDismissRequest = { onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(modifier = Modifier.fillMaxSize()) {
-            AnimatedVisibility(
-                visible = true,
-                enter = fadeIn(animationSpec = tween(200)),
-                exit = fadeOut(animationSpec = tween(200))
-            ) {
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable { onDismiss() }
-                )
+            AnimatedVisibility(visible = true, enter = fadeIn(animationSpec = tween(200)), exit = fadeOut(animationSpec = tween(200))) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable { onDismiss() })
             }
 
-            AnimatedVisibility(
-                visible = true,
-                enter = slideInVertically(initialOffsetY = { full -> full }, animationSpec = tween(300)),
-                exit = slideOutVertically(targetOffsetY = { full -> full }, animationSpec = tween(250))
-            ) {
+            AnimatedVisibility(visible = true, enter = slideInVertically(initialOffsetY = { full -> full }, animationSpec = tween(300)), exit = slideOutVertically(targetOffsetY = { full -> full }, animationSpec = tween(250))) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                     Column(
                         modifier = Modifier
@@ -114,23 +107,12 @@ fun GenericOptionsSheet(
                             .draggable(
                                 orientation = Orientation.Vertical,
                                 state = rememberDraggableState { delta ->
-                                    scope.launch {
-                                        val new = (sheetHeightPx.value - delta).coerceIn(0f, maxHeightPx)
-                                        sheetHeightPx.snapTo(new)
-                                    }
+                                    scope.launch { val new = (sheetHeightPx.value - delta).coerceIn(0f, maxHeightPx); sheetHeightPx.snapTo(new) }
                                 },
                                 onDragStopped = { velocity ->
                                     scope.launch {
                                         val current = sheetHeightPx.value
-                                        if (velocity > 2000f || current < minHeightPx * 0.6f) {
-                                            onDismiss()
-                                        } else {
-                                            if (current > (minHeightPx + maxHeightPx) / 2f) {
-                                                sheetHeightPx.animateTo(maxHeightPx, tween(250))
-                                            } else {
-                                                sheetHeightPx.animateTo(minHeightPx, tween(250))
-                                            }
-                                        }
+                                        if (velocity > 2000f || current < minHeightPx * 0.6f) onDismiss() else if (current > (minHeightPx + maxHeightPx) / 2f) sheetHeightPx.animateTo(maxHeightPx, tween(250)) else sheetHeightPx.animateTo(minHeightPx, tween(250))
                                     }
                                 }
                             )
@@ -138,38 +120,44 @@ fun GenericOptionsSheet(
                             .padding(16.dp)
                     ) {
                         // handle
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .height(6.dp)
-                                .width(40.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(Color.LightGray.copy(alpha = 0.15f))
-                        )
+                        Box(modifier = Modifier.align(Alignment.CenterHorizontally).height(6.dp).width(40.dp).clip(RoundedCornerShape(3.dp)).background(Color.LightGray.copy(alpha = 0.15f)))
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        headerContent?.let {
-                            it()
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
+                        headerContent?.let { it(); Spacer(modifier = Modifier.height(12.dp)) }
 
-                        // options list
                         options.forEach { opt ->
+                            // leading image loader if provided
+                            var leadBitmap by remember(opt.leadingImageUri) { mutableStateOf<ImageBitmap?>(null) }
+                            LaunchedEffect(opt.leadingImageUri) {
+                                leadBitmap = try {
+                                    opt.leadingImageUri?.let { uriStr ->
+                                        val uri = android.net.Uri.parse(uriStr)
+                                        ctx.contentResolver.openInputStream(uri)?.use { stream ->
+                                            val bmp = BitmapFactory.decodeStream(stream)
+                                            bmp?.asImageBitmap()
+                                        }
+                                    }
+                                } catch (_: Exception) { null }
+                            }
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        try {
-                                            opt.onClick()
-                                        } catch (_: Exception) {}
-                                        onDismiss()
-                                    }
+                                    .then(if (opt.rowClickable) Modifier.clickable { try { opt.onClick() } catch (_: Exception) {}; onDismiss() } else Modifier)
                                     .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(imageVector = opt.icon, contentDescription = opt.label, tint = opt.iconTint)
+                                if (leadBitmap != null) {
+                                    Image(bitmap = leadBitmap!!, contentDescription = opt.label, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
+                                } else if (opt.icon != null) {
+                                    Icon(imageVector = opt.icon, contentDescription = opt.label, tint = opt.iconTint)
+                                }
+
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text(text = opt.label, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                                Text(text = opt.label, color = Color.White, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+
+                                // trailing content (e.g., plus button)
+                                opt.trailingContent?.let { tc -> tc() }
                             }
                         }
 
