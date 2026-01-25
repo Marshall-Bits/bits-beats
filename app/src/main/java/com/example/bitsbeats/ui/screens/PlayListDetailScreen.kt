@@ -64,6 +64,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,6 +87,13 @@ fun PlaylistDetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf(playlistName) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Mutex to serialize deletions
+    val deleteMutex = remember { Mutex() }
+    // Set of URIs currently being deleted
+    var deletingUris by remember { mutableStateOf(setOf<String>()) }
+    // Coroutine scope for launching deletions
+    val scope = rememberCoroutineScope()
 
     // artwork URI state (so we can update after picking an image)
     var currentArtworkUri by remember {
@@ -355,12 +365,27 @@ fun PlaylistDetailScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), CircleShape), contentAlignment = Alignment.Center) {
-                            IconButton(onClick = {
-                                val uri = item["uri"] as? String ?: ""
-                                PlaylistStore.removeItemFromPlaylist(context, playlistName, uri)
-                                items = PlaylistStore.getPlaylist(context, playlistName)
-                                Toast.makeText(context, "Deleted from $playlistName", Toast.LENGTH_SHORT).show()
-                            }) {
+                            val uri = item["uri"] as? String ?: ""
+                            IconButton(
+                                onClick = {
+                                    // Delete action: use mutex to ensure thread safety
+                                    scope.launch {
+                                        deleteMutex.lock()
+                                        try {
+                                            // mark URI as deleting
+                                            deletingUris = deletingUris + uri
+                                            PlaylistStore.removeItemFromPlaylist(context, playlistName, uri)
+                                            items = PlaylistStore.getPlaylist(context, playlistName)
+                                            Toast.makeText(context, "Deleted from $playlistName", Toast.LENGTH_SHORT).show()
+                                            // unmark URI
+                                            deletingUris = deletingUris - uri
+                                        } finally {
+                                            deleteMutex.unlock()
+                                        }
+                                    }
+                                },
+                                enabled = uri !in deletingUris
+                            ) {
                                 Icon(imageVector = Icons.Filled.Remove, contentDescription = "Delete", tint = Color.Black)
                             }
                         }
