@@ -133,7 +133,7 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 // Shuffle on the left
                 val shuffleOn = PlaybackController.shuffleEnabled
                 val shuffleTint = if (shuffleOn) Color(0xFF1DB954) else Color.White
@@ -162,8 +162,8 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
 
                 // Repeat on the right
                 val repeatMode = PlaybackController.repeatMode
-                val repeatActive = repeatMode != com.example.bitsbeats.ui.components.PlaybackController.RepeatMode.OFF
-                val repeatIcon = if (repeatMode == com.example.bitsbeats.ui.components.PlaybackController.RepeatMode.REPEAT_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat
+                val repeatActive = repeatMode != PlaybackController.RepeatMode.OFF
+                val repeatIcon = if (repeatMode == PlaybackController.RepeatMode.REPEAT_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat
                 val repeatTint = if (repeatActive) Color(0xFF1DB954) else Color.White
                 IconButton(onClick = { PlaybackController.toggleRepeatMode() }, modifier = Modifier.size(48.dp)) {
                     Icon(imageVector = repeatIcon, contentDescription = "Repeat mode", modifier = Modifier.size(28.dp), tint = repeatTint)
@@ -172,3 +172,21 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
