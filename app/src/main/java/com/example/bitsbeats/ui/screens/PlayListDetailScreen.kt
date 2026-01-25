@@ -9,7 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.layout.ContentScale
@@ -24,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
@@ -184,13 +184,14 @@ fun PlaylistDetailScreen(
                 onDismiss = { showOptionsSheet = false },
                 headerContent = null,
                 options = listOf(
-                    GenericOptionItem(label = "Editar nombre", icon = Icons.Filled.Edit, onClick = {
+                    GenericOptionItem(label = "Add songs", icon = Icons.Filled.Add, onClick = { onAddSongs() }),
+                    GenericOptionItem(label = "Edit name", icon = Icons.Filled.Edit, onClick = {
                         showRenameDialog = true
                     }),
-                    GenericOptionItem(label = "Modificar imagen", icon = Icons.Filled.Image, onClick = {
+                    GenericOptionItem(label = "Edit image", icon = Icons.Filled.Image, onClick = {
                         imageLauncher.launch(arrayOf("image/*"))
                     }),
-                    GenericOptionItem(label = "Eliminar playlist", icon = Icons.Filled.Delete, iconTint = Color(0xFFFF6B6B), onClick = {
+                    GenericOptionItem(label = "Delete playlist", icon = Icons.Filled.Delete, iconTint = Color(0xFFFF6B6B), onClick = {
                         showDeleteConfirm = true
                     })
                 )
@@ -290,16 +291,6 @@ fun PlaylistDetailScreen(
                     }) { Text("Cancelar") }
                 }
             )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.End
-        ) {
-            // Play removed from this screen; control playback via mini-player.
-            Button(onClick = onAddSongs) { Text("Add songs") }
         }
 
         if (items.isEmpty()) {
