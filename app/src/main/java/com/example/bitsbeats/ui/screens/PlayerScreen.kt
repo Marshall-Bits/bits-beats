@@ -70,6 +70,12 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(24.dp)) {
+            // Active playlist indicator
+            if (PlaybackController.activePlaylistName != null) {
+                Text(text = "Active playlist: ${PlaybackController.activePlaylistName}", fontSize = 14.sp, color = Color.LightGray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Album artwork: use Animatable so rotation preserves position on pause and resets on track change
             val currentUri = PlaybackController.currentUri
             val rotationAnim = remember { Animatable(0f) }
