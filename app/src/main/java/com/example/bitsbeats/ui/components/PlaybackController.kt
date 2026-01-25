@@ -224,17 +224,17 @@ object PlaybackController {
     }
 
     fun prevTrack() {
-        // If there's no queue, do nothing
         if (queue.isEmpty()) return
-
-        // If there is a previous item, go back. Otherwise do nothing.
-        if (queueIndex - 1 >= 0) {
-            queueIndex -= 1
-            appContext?.let { saveState(it) }
-            playCurrentFromQueue()
+        if (currentPosition > 3000) {
+            seekTo(0)
         } else {
-            // no previous track: do nothing
-            return
+            if (queueIndex > 0) {
+                queueIndex -= 1
+                appContext?.let { saveState(it) }
+                playCurrentFromQueue()
+            } else {
+                seekTo(0)
+            }
         }
     }
 

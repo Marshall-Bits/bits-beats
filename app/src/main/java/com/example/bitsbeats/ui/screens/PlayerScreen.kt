@@ -8,13 +8,13 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -146,7 +146,7 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
                 // Center controls
                 Row(modifier = Modifier.width(240.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { PlaybackController.prevTrack() }, modifier = Modifier.size(64.dp)) {
-                        Icon(Icons.Filled.ChevronLeft, contentDescription = "Canción anterior", modifier = Modifier.size(48.dp), tint = Color.White)
+                        Icon(Icons.Filled.SkipPrevious, contentDescription = "Canción anterior", modifier = Modifier.size(48.dp), tint = Color.White)
                     }
 
                     IconButton(onClick = { PlaybackController.togglePlayPause() }, modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.White)) {
@@ -154,7 +154,7 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
                     }
 
                     IconButton(onClick = { PlaybackController.nextTrack() }, modifier = Modifier.size(64.dp)) {
-                        Icon(Icons.Filled.ChevronRight, contentDescription = "Siguiente canción", modifier = Modifier.size(48.dp), tint = Color.White)
+                        Icon(Icons.Filled.SkipNext, contentDescription = "Siguiente canción", modifier = Modifier.size(48.dp), tint = Color.White)
                     }
                 }
 
@@ -172,25 +172,3 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
