@@ -107,6 +107,10 @@ object PlaylistStore {
     fun addItemToPlaylist(context: Context, playlistName: String, uri: String, title: String, artist: String, duration: Long) {
         val all = loadAll(context).toMutableMap()
         val list = all[playlistName]?.toMutableList() ?: mutableListOf()
+        // Check if the song is already in the playlist
+        if (list.any { it["uri"] == uri }) {
+            return // Do not add duplicate
+        }
         val item = mapOf("uri" to uri, "title" to title, "artist" to artist, "duration" to duration)
         list.add(item)
         all[playlistName] = list
