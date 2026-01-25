@@ -28,6 +28,8 @@ import android.media.MediaDescription
 import android.media.MediaMetadata
 import android.media.session.PlaybackState
 import android.annotation.SuppressLint
+import android.content.ContentValues.TAG
+import android.util.Log
 
 /**
  * Minimal foreground service that exposes playback controls via a notification
@@ -48,6 +50,7 @@ class MediaPlaybackService : Service() {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var lastSnapshot: PlaybackStateSnapshot? = null
     private var mediaSession: MediaSession? = null
+    private var foregroundStarted = false
 
     private val listener = object : PlaybackStateListener {
         override fun onPlaybackStateChanged(snapshot: PlaybackStateSnapshot) {
@@ -60,24 +63,27 @@ class MediaPlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "onCreate: MediaPlaybackService starting")
         createNotificationChannel()
 
         // create framework MediaSession so the system can host media controls area
         try {
             mediaSession = MediaSession(this, "BitsBeatsSession").apply {
                 setCallback(object : MediaSession.Callback() {
-                    override fun onPlay() { PlaybackController.togglePlayPause() }
-                    override fun onPause() { PlaybackController.togglePlayPause() }
-                    override fun onSkipToNext() { PlaybackController.nextTrack() }
-                    override fun onSkipToPrevious() { PlaybackController.prevTrack() }
-                    override fun onSeekTo(pos: Long) { PlaybackController.seekTo(pos.toInt()) }
-                    override fun onStop() { PlaybackController.clearPlaybackAndReset(); stopSelf() }
+                    override fun onPlay() { Log.d(TAG, "MediaSession.onPlay"); PlaybackController.togglePlayPause() }
+                    override fun onPause() { Log.d(TAG, "MediaSession.onPause"); PlaybackController.togglePlayPause() }
+                    override fun onSkipToNext() { Log.d(TAG, "MediaSession.onSkipToNext"); PlaybackController.nextTrack() }
+                    override fun onSkipToPrevious() { Log.d(TAG, "MediaSession.onSkipToPrevious"); PlaybackController.prevTrack() }
+                    override fun onSeekTo(pos: Long) { Log.d(TAG, "MediaSession.onSeekTo: $pos"); PlaybackController.seekTo(pos.toInt()) }
+                    override fun onStop() { Log.d(TAG, "MediaSession.onStop"); PlaybackController.clearPlaybackAndReset(); stopSelf() }
                 })
                 // indicate handling of media buttons and transport controls
                 setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
                 isActive = true
             }
-        } catch (_: Exception) {
+            Log.d(TAG, "MediaSession created and activated")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to create MediaSession", e)
             mediaSession = null
         }
 
@@ -93,6 +99,25 @@ class MediaPlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand: action=${intent?.action}")
+
+        // Ensure we call startForeground quickly when the service is started via startForegroundService
+        if (!foregroundStarted) {
+            try {
+                val placeholder = buildPlaceholderNotification()
+                try {
+                    startForeground(NOTIFICATION_ID, placeholder)
+                    foregroundStarted = true
+                    Log.d(TAG, "startForeground called with placeholder notification")
+                } catch (e: Exception) {
+                    Log.w(TAG, "startForeground placeholder failed", e)
+                    // best effort: still proceed
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "failed to build/start placeholder notification", e)
+            }
+        }
+
         if (intent?.action != null) {
             when (intent.action) {
                 ACTION_PLAY -> PlaybackController.togglePlayPause()
@@ -106,6 +131,34 @@ class MediaPlaybackService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    private fun buildPlaceholderNotification(): android.app.Notification {
+        val mainIntent = Intent(this@MediaPlaybackService, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val contentPending = PendingIntent.getActivity(this@MediaPlaybackService, 0, mainIntent, if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_IMMUTABLE else 0)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("BitsBeats")
+            .setContentText("Reproduciendo")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentIntent(contentPending)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setOngoing(true)
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.Notification.Builder(this, CHANNEL_ID)
+                .setContentTitle("BitsBeats")
+                .setContentText("Reproduciendo")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentIntent(contentPending)
+                .setOngoing(true)
+                .build()
+        } else {
+            builder.build()
+        }
     }
 
     private fun updateSession(snapshot: PlaybackStateSnapshot) {
