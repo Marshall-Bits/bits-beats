@@ -9,7 +9,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,16 +38,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.Animatable
 import com.example.bitsbeats.R
 
 /**
@@ -65,6 +73,23 @@ fun OptionsMenuSheet(
     if (!visible) return
 
     val context = LocalContext.current
+    val config = LocalConfiguration.current
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+
+    // compute sizes in pixels
+    val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
+    val topMarginPx = with(density) { 48.dp.toPx() } // leave ~48dp at top
+    val minHeightPx = screenHeightPx / 2f
+    val maxHeightPx = (screenHeightPx - topMarginPx).coerceAtLeast(minHeightPx)
+
+    // Animatable controlling current sheet height in px
+    val sheetHeightPx = remember { Animatable(minHeightPx) }
+    val sheetHeightDp = remember {
+        derivedStateOf {
+            with(density) { sheetHeightPx.value.toDp() }
+        }
+    }
 
     // artwork loaded asynchronously
     var artBitmap by remember(selectedAudioUri) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
@@ -72,6 +97,13 @@ fun OptionsMenuSheet(
         artBitmap = try {
             selectedAudioUri?.let { com.example.bitsbeats.util.loadEmbeddedArtwork(context, it) }
         } catch (_: Exception) { null }
+    }
+
+    // Reset sheet height when shown
+    LaunchedEffect(visible) {
+        if (visible) {
+            scope.launch { sheetHeightPx.snapTo(minHeightPx) }
+        }
     }
 
     Dialog(onDismissRequest = { onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -96,22 +128,44 @@ fun OptionsMenuSheet(
                 enter = slideInVertically(initialOffsetY = { full -> full }, animationSpec = tween(300)),
                 exit = slideOutVertically(targetOffsetY = { full -> full }, animationSpec = tween(250))
             ) {
-                // AnimatedVisibility's content is not in the parent BoxScope, so wrap with a Box
+                // wrap to allow bottom alignment
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .wrapContentHeight()
-                            .pointerInput(Unit) {
-                                detectVerticalDragGestures { _, dragAmount ->
-                                    if (dragAmount > 20) onDismiss()
+                            .height(sheetHeightDp.value)
+                            .draggable(
+                                orientation = Orientation.Vertical,
+                                state = rememberDraggableState { delta ->
+                                    // delta >0 when dragging down; reduce height when dragging down
+                                    scope.launch {
+                                        val new = (sheetHeightPx.value - delta).coerceIn(0f, maxHeightPx)
+                                        sheetHeightPx.snapTo(new)
+                                    }
+                                },
+                                onDragStopped = { velocity ->
+                                    scope.launch {
+                                        val current = sheetHeightPx.value
+                                        // If released with fast downward velocity or height is small => dismiss
+                                        if (velocity > 2000f || current < minHeightPx * 0.6f) {
+                                            onDismiss()
+                                        } else {
+                                            // If dragged up beyond midpoint -> expand to max
+                                            if (current > (minHeightPx + maxHeightPx) / 2f) {
+                                                sheetHeightPx.animateTo(maxHeightPx, tween(250))
+                                            } else {
+                                                // snap back to min
+                                                sheetHeightPx.animateTo(minHeightPx, tween(250))
+                                            }
+                                        }
+                                    }
                                 }
-                            }
+                            )
                             .background(color = Color(0xFF0F0F0F), shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                             .padding(16.dp)
                     ) {
-                        // small drag handle
-                        Spacer(modifier = Modifier.height(4.dp))
+                        // small drag handle (visual)
+                        Spacer(modifier = Modifier.height(6.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                             Spacer(modifier = Modifier.height(4.dp))
                         }
