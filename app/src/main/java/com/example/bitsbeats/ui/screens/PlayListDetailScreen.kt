@@ -58,6 +58,11 @@ import com.example.bitsbeats.ui.components.GenericOptionsSheet
 import com.example.bitsbeats.ui.components.GenericOptionItem
 import com.example.bitsbeats.util.formatDuration
 import androidx.core.net.toUri
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
 @OptIn(ExperimentalMaterial3Api::class)
@@ -312,6 +317,36 @@ fun PlaylistDetailScreen(
                             .clickable { playIndex(idx) },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Thumbnail image
+                        val ctx = LocalContext.current
+                        val audioUriString = item["uri"] as? String ?: ""
+                        var embeddedBitmap by remember(audioUriString) {
+                            mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
+                        }
+                        LaunchedEffect(audioUriString) {
+                            embeddedBitmap = try {
+                                com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, audioUriString)
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+
+                        if (embeddedBitmap != null) {
+                            Image(
+                                bitmap = embeddedBitmap!!,
+                                contentDescription = "Artwork",
+                                modifier = Modifier.size(48.dp).clip(CircleShape).clickable { playIndex(idx) }
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(id = R.drawable.song_default),
+                                contentDescription = "Default artwork",
+                                modifier = Modifier.size(48.dp).clip(CircleShape).clickable { playIndex(idx) }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = item["title"] as? String ?: "Desconocido",
