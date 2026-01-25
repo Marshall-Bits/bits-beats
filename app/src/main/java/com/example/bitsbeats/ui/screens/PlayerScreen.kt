@@ -149,8 +149,8 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
                         Icon(Icons.Filled.ChevronLeft, contentDescription = "Canción anterior", modifier = Modifier.size(48.dp), tint = Color.White)
                     }
 
-                    IconButton(onClick = { PlaybackController.togglePlayPause() }, modifier = Modifier.size(80.dp)) {
-                        Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", modifier = Modifier.size(64.dp), tint = Color.White)
+                    IconButton(onClick = { PlaybackController.togglePlayPause() }, modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.White)) {
+                        Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", modifier = Modifier.size(48.dp), tint = Color.Black)
                     }
 
                     IconButton(onClick = { PlaybackController.nextTrack() }, modifier = Modifier.size(64.dp)) {
@@ -172,6 +172,10 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
         }
     }
 }
+
+
+
+
 
 
 
