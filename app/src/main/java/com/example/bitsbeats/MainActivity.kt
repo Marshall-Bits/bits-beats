@@ -217,7 +217,7 @@ class MainActivity : ComponentActivity() {
                             navController = navController,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(64.dp)
+                                .height(65.dp)
                         )
                     }
 

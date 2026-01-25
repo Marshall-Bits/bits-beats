@@ -34,72 +34,96 @@ fun PlaybackMiniPlayer(navController: NavHostController, modifier: Modifier = Mo
     val title = PlaybackController.title
     val artist = PlaybackController.artist
     val isPlaying = PlaybackController.isPlaying
+    val progress = if (PlaybackController.duration > 0) {
+        PlaybackController.currentPosition.toFloat() / PlaybackController.duration
+    } else {
+        0f
+    }
 
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF010000))
-            // navigate to the 'player' route which will NOT reinitialize playback when a track is already loaded
+            .background(Color(0xFF1A001F))
             .clickable { navController.navigate("player") }
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        // rotate vinyl while playing, preserve rotation when paused using Animatable
-        val currentUri = PlaybackController.currentUri
-        val rotationAnim = remember { Animatable(0f) }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // rotate vinyl while playing, preserve rotation when paused using Animatable
+            val currentUri = PlaybackController.currentUri
+            val rotationAnim = remember { Animatable(0f) }
 
-        // Reset rotation when a new track starts
-        LaunchedEffect(currentUri) {
-            rotationAnim.snapTo(0f)
-        }
+            // Reset rotation when a new track starts
+            LaunchedEffect(currentUri) {
+                rotationAnim.snapTo(0f)
+            }
 
-        // When playing, keep animating in +360 steps; when paused the coroutine cancels and the value is kept
-        LaunchedEffect(isPlaying, currentUri) {
-            if (isPlaying) {
-                while (isActive && PlaybackController.isPlaying) {
-                    val target = rotationAnim.value + 360f
-                    rotationAnim.animateTo(target, animationSpec = tween(durationMillis = 8000, easing = LinearEasing))
+            // When playing, keep animating in +360 steps; when paused the coroutine cancels and the value is kept
+            LaunchedEffect(isPlaying, currentUri) {
+                if (isPlaying) {
+                    while (isActive && PlaybackController.isPlaying) {
+                        val target = rotationAnim.value + 360f
+                        rotationAnim.animateTo(target, animationSpec = tween(durationMillis = 8000, easing = LinearEasing))
+                    }
                 }
             }
-        }
 
-        // Load embedded artwork (if any) asynchronously
-        val ctx = androidx.compose.ui.platform.LocalContext.current
-        val embeddedBitmapState = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = currentUri) {
-            value = try { com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, currentUri) } catch (_: Exception) { null }
-        }
+            // Load embedded artwork (if any) asynchronously
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val embeddedBitmapState = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, key1 = currentUri) {
+                value = try { com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, currentUri) } catch (_: Exception) { null }
+            }
 
-        Box(contentAlignment = Alignment.Center) {
-            Image(
-                painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
-                contentDescription = "Artwork",
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .rotate(rotationAnim.value % 360f)
-            )
-
-            // overlay embedded artwork if present (slightly smaller)
-            if (embeddedBitmapState.value != null) {
+            Box(contentAlignment = Alignment.Center) {
                 Image(
-                    bitmap = embeddedBitmapState.value!!,
-                    contentDescription = "Embedded artwork",
+                    painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
+                    contentDescription = "Artwork",
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .rotate(rotationAnim.value % 360f)
                 )
+
+                // overlay embedded artwork if present (slightly smaller)
+                if (embeddedBitmapState.value != null) {
+                    Image(
+                        bitmap = embeddedBitmapState.value!!,
+                        contentDescription = "Embedded artwork",
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .rotate(rotationAnim.value % 360f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                Text(text = artist.ifBlank { "Artista desconocido" }, color = Color.LightGray, maxLines = 1)
+            }
+            IconButton(onClick = { PlaybackController.togglePlayPause() }) {
+                Icon(imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", tint = Color.White)
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-            Text(text = artist.ifBlank { "Artista desconocido" }, color = Color.LightGray, maxLines = 1)
-        }
-        IconButton(onClick = { PlaybackController.togglePlayPause() }) {
-            Icon(imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", tint = Color.White)
+        // Progress bar at the end of this component
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .background(Color.White.copy(alpha = 0.3f)) // Subtle white background
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction = progress)
+                    .height(2.dp)
+                    .background(Color.White) // White progress bar
+            )
         }
     }
 }
