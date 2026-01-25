@@ -128,7 +128,7 @@ fun PlaylistDetailScreen(
             if (uris.isEmpty()) return
             PlaybackController.playQueue(context, uris, index, playlistName = playlistName)
         } catch (_: Exception) {
-            Toast.makeText(context, "No se pudo reproducir", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Could not play", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -159,7 +159,7 @@ fun PlaylistDetailScreen(
                 IconButton(onClick = { onBackToList() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Atrás",
+                        contentDescription = "Back",
                         tint = Color.White
                     )
                 }
@@ -168,7 +168,7 @@ fun PlaylistDetailScreen(
                 IconButton(onClick = { showOptionsSheet = true }) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "Opciones",
+                        contentDescription = "Options",
                         tint = Color.White
                     )
                 }
@@ -223,12 +223,12 @@ fun PlaylistDetailScreen(
         if (showRenameDialog) {
             AlertDialog(
                 onDismissRequest = { showRenameDialog = false },
-                title = { Text("Editar nombre") },
+                title = { Text("Edit name") },
                 text = {
                     TextField(
                         value = renameText,
                         onValueChange = { renameText = it },
-                        placeholder = { Text("Nuevo nombre") })
+                        placeholder = { Text("New name") })
                 },
                 confirmButton = {
                     Button(onClick = {
@@ -236,7 +236,7 @@ fun PlaylistDetailScreen(
                         if (newN.isNotBlank()) {
                             val ok = PlaylistStore.renamePlaylist(context, playlistName, newN)
                             if (ok) {
-                                Toast.makeText(context, "Renombrada a '$newN'", Toast.LENGTH_SHORT)
+                                Toast.makeText(context, "Renamed to '$newN'", Toast.LENGTH_SHORT)
                                     .show()
                                 showRenameDialog = false
                                 // navigate back to list so user can open the renamed playlist
@@ -244,17 +244,17 @@ fun PlaylistDetailScreen(
                             } else {
                                 Toast.makeText(
                                     context,
-                                    "No se pudo renombrar (ya existe o error)",
+                                    "Could not rename (already exists or error)",
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
                         }
-                    }) { Text("Guardar") }
+                    }) { Text("Save") }
                 },
                 dismissButton = {
                     Button(onClick = {
                         showRenameDialog = false
-                    }) { Text("Cancelar") }
+                    }) { Text("Cancel") }
                 }
             )
         }
@@ -263,8 +263,8 @@ fun PlaylistDetailScreen(
         if (showDeleteConfirm) {
             AlertDialog(
                 onDismissRequest = { showDeleteConfirm = false },
-                title = { Text("Eliminar playlist") },
-                text = { Text("¿Eliminar la playlist '$playlistName'? Esta acción no se puede deshacer.") },
+                title = { Text("Delete playlist") },
+                text = { Text("Delete the playlist '$playlistName'? This action cannot be undone.") },
                 confirmButton = {
                     Button(onClick = {
                         try {
@@ -272,22 +272,22 @@ fun PlaylistDetailScreen(
                             if (PlaybackController.activePlaylistName == playlistName) {
                                 PlaybackController.clearPlaybackAndReset()
                             }
-                            Toast.makeText(context, "Playlist eliminada", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Playlist deleted", Toast.LENGTH_SHORT).show()
                             showDeleteConfirm = false
                             onBackToList()
                         } catch (_: Exception) {
                             Toast.makeText(
                                 context,
-                                "No se pudo eliminar la playlist",
+                                "Could not delete the playlist",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
-                    }) { Text("Eliminar") }
+                    }) { Text("Delete") }
                 },
                 dismissButton = {
                     Button(onClick = {
                         showDeleteConfirm = false
-                    }) { Text("Cancelar") }
+                    }) { Text("Cancel") }
                 }
             )
         }
@@ -296,7 +296,7 @@ fun PlaylistDetailScreen(
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
-            ) { Text("No hay canciones en esta playlist", color = Color.White) }
+            ) { Text("No songs in this playlist", color = Color.White) }
         } else {
             LazyColumn(modifier = Modifier
                 .fillMaxSize()
