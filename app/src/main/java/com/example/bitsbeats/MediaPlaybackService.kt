@@ -27,6 +27,7 @@ import android.media.session.MediaSession
 import android.media.MediaDescription
 import android.media.MediaMetadata
 import android.media.session.PlaybackState
+import android.annotation.SuppressLint
 
 /**
  * Minimal foreground service that exposes playback controls via a notification
@@ -138,6 +139,7 @@ class MediaPlaybackService : Service() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun updateNotification(snapshot: PlaybackStateSnapshot) {
         try {
             scope.launch {
@@ -214,19 +216,21 @@ class MediaPlaybackService : Service() {
                 // Only post or start foreground if notifications permission is granted (Android 13+)
                 val canPost = (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) || (ContextCompat.checkSelfPermission(this@MediaPlaybackService, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
 
-                if (snapshot.isPlaying) {
+                // If there is a loaded track (even paused), keep the media notification and foreground so the system can show media controls.
+                if (snapshot.currentUri != null) {
                     try {
                         if (canPost) {
-                            // ensure notification uses media style with session token before starting foreground
                             startForeground(NOTIFICATION_ID, notification)
+                        } else {
+                            nm.notify(NOTIFICATION_ID, notification)
                         }
                     } catch (_: Exception) {
                         if (canPost) nm.notify(NOTIFICATION_ID, notification)
                     }
                 } else {
-                    // not playing: update notification and drop foreground if we currently are foreground
-                    try { stopForeground(false) } catch (_: Exception) {}
-                    if (canPost) nm.notify(NOTIFICATION_ID, notification)
+                    // no track loaded: stop foreground and remove notification
+                    try { stopForeground(true) } catch (_: Exception) {}
+                    try { nm.cancel(NOTIFICATION_ID) } catch (_: Exception) {}
                 }
             }
         } catch (_: Exception) {}

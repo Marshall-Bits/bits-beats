@@ -73,10 +73,31 @@ class MainActivity : ComponentActivity() {
                 val appContext = LocalContext.current
                 // restore persisted playback state once when the UI is composed
                 LaunchedEffect(Unit) {
+                    // Ensure MediaPlaybackService is started early so it can register its listener
+                    try {
+                        val svcIntent = android.content.Intent(appContext, com.example.bitsbeats.MediaPlaybackService::class.java)
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            try { appContext.startForegroundService(svcIntent) } catch (_: Exception) { appContext.startService(svcIntent) }
+                        } else {
+                            try { appContext.startService(svcIntent) } catch (_: Exception) {}
+                        }
+                    } catch (_: Exception) {}
+
+                    // restore persisted playback state once the service is available
                     try {
                         PlaybackController.restoreState(appContext)
                     } catch (_: Exception) {
                     }
+
+                    // Ensure MediaPlaybackService is started if we have a restored playback or current track
+                    try {
+                        val svcIntent = android.content.Intent(appContext, com.example.bitsbeats.MediaPlaybackService::class.java)
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            try { appContext.startForegroundService(svcIntent) } catch (_: Exception) { appContext.startService(svcIntent) }
+                        } else {
+                            try { appContext.startService(svcIntent) } catch (_: Exception) {}
+                        }
+                    } catch (_: Exception) {}
                 }
                 Box(modifier = Modifier.fillMaxSize()) {
                     NavHost(
