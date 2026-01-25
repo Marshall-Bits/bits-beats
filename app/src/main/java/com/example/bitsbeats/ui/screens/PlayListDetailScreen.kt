@@ -30,9 +30,8 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -56,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import com.example.bitsbeats.R
 import com.example.bitsbeats.ui.components.PlaybackController
 import com.example.bitsbeats.ui.components.PlaylistStore
+import com.example.bitsbeats.ui.components.GenericOptionsSheet
+import com.example.bitsbeats.ui.components.GenericOptionItem
 import com.example.bitsbeats.util.formatDuration
 import androidx.core.net.toUri
 
@@ -72,7 +73,9 @@ fun PlaylistDetailScreen(
     var items by remember { mutableStateOf(PlaylistStore.getPlaylist(context, playlistName)) }
 
     // menu state
-    var menuExpanded by remember { mutableStateOf(false) }
+    // (previous DropdownMenu removed; we now open a bottom sheet)
+
+    var showOptionsSheet by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf(playlistName) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -157,60 +160,36 @@ fun PlaylistDetailScreen(
                 }
             },
             actions = {
-                IconButton(onClick = {
-                    menuExpanded = true
-                }) {
+                IconButton(onClick = { showOptionsSheet = true }) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = "Opciones",
                         tint = Color.White
                     )
                 }
-                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Edit name") },
-                        onClick = { menuExpanded = false; showRenameDialog = true },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Edit,
-                                contentDescription = "Edit name",
-                                tint = Color.White
-                            )
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete playlist") },
-                        onClick = {
-                            menuExpanded = false
-                            showDeleteConfirm = true
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = "Delete playlist",
-                                tint = Color.White
-                            )
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Modify image") },
-                        onClick = {
-                            menuExpanded = false
-                            // open SAF image picker; filter images
-                            imageLauncher.launch(arrayOf("image/*"))
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Image,
-                                contentDescription = "Modify image",
-                                tint = Color.White
-                            )
-                        }
-                    )
-                }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF010000))
         )
+
+        // Show the bottom sheet with playlist options when requested
+        if (showOptionsSheet) {
+            GenericOptionsSheet(
+                visible = showOptionsSheet,
+                onDismiss = { showOptionsSheet = false },
+                headerContent = null,
+                options = listOf(
+                    GenericOptionItem(label = "Editar nombre", icon = Icons.Filled.Edit, onClick = {
+                        showRenameDialog = true
+                    }),
+                    GenericOptionItem(label = "Modificar imagen", icon = Icons.Filled.Image, onClick = {
+                        imageLauncher.launch(arrayOf("image/*"))
+                    }),
+                    GenericOptionItem(label = "Eliminar playlist", icon = Icons.Filled.Delete, iconTint = Color(0xFFFF6B6B), onClick = {
+                        showDeleteConfirm = true
+                    })
+                )
+            )
+        }
 
         // header artwork
         if (artworkBitmap.value != null) {
