@@ -34,8 +34,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -78,7 +76,6 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
     // Name of playlist pending deletion (to show confirm dialog)
     var playlistToDelete by remember { mutableStateOf<String?>(null) }
     // menu state for per-row options
-    var menuFor by remember { mutableStateOf<String?>(null) }
     var selectedMenuPlaylist by remember { mutableStateOf<String?>(null) }
     var showPlaylistOptions by remember { mutableStateOf(false) }
     var editingName by remember { mutableStateOf<String?>(null) }
@@ -107,10 +104,10 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
 
     Box(modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color(0xFF010000)), contentAlignment = Alignment.TopCenter) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "Mis Playlists", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(16.dp))
+            Text(text = "Playlists", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(16.dp))
 
             Button(onClick = { showingDialog = true }, modifier = Modifier.padding(8.dp)) {
-                Icon(imageVector = Icons.Filled.Add, contentDescription = "Nueva playlist", modifier = Modifier.size(20.dp), tint = Color.White)
+                Icon(imageVector = Icons.Filled.Add, contentDescription = "New playlist", modifier = Modifier.size(20.dp), tint = Color.White)
                 Spacer(modifier = Modifier.size(8.dp))
                 Text("New Playlist")
             }
@@ -118,7 +115,7 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
             Spacer(modifier = Modifier.height(12.dp))
 
             if (playlists.isEmpty()) {
-                Text(text = "No tienes playlists", color = Color.White)
+                Text(text = "No playlists", color = Color.White)
             } else {
                 // Two-column grid: smaller cards so two fit per row. Add bottom padding to respect mini-player + nav.
                 val bottomNavPadding = 180.dp
@@ -182,7 +179,7 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
 
                                     Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
                                         IconButton(onClick = { selectedMenuPlaylist = name; showPlaylistOptions = true }) {
-                                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones", tint = Color.White)
+                                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Options", tint = Color.White)
                                         }
                                     }
                                 }
@@ -198,8 +195,8 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
             val nameToDelete = playlistToDelete!!
             AlertDialog(
                 onDismissRequest = { playlistToDelete = null },
-                title = { Text("Eliminar playlist") },
-                text = { Text("¿Eliminar la playlist '$nameToDelete'? Esta acción no se puede deshacer.") },
+                title = { Text("Delete playlist") },
+                text = { Text("¿Delete '$nameToDelete'? This action cannot be undone") },
                 confirmButton = {
                     Button(onClick = {
                         // PlaylistStore.deletePlaylist returns Unit; perform deletion then handle active playlist cleanup.
@@ -211,14 +208,14 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                             }
                             playlists = PlaylistStore.loadAll(context).keys.toList()
                             playlistToDelete = null
-                            Toast.makeText(context, "Playlist eliminada", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Playlist deleted", Toast.LENGTH_SHORT).show()
                         } catch (e: Exception) {
-                            Toast.makeText(context, "No se pudo eliminar la playlist", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Error deleting the playlist", Toast.LENGTH_SHORT).show()
                         }
-                    }) { Text("Eliminar") }
+                    }) { Text("Delete") }
                 },
                 dismissButton = {
-                    Button(onClick = { playlistToDelete = null }) { Text("Cancelar") }
+                    Button(onClick = { playlistToDelete = null }) { Text("Cancel") }
                 }
             )
         }
@@ -227,9 +224,9 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
         if (showingDialog) {
             AlertDialog(
                 onDismissRequest = { showingDialog = false },
-                title = { Text("Nombre de la playlist") },
+                title = { Text("Playlist name") },
                 text = {
-                    TextField(value = newName, onValueChange = { newName = it }, placeholder = { Text("Nombre") })
+                    TextField(value = newName, onValueChange = { newName = it }, placeholder = { Text("Name") })
                 },
                 confirmButton = {
                     Button(onClick = {
@@ -240,13 +237,13 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                                 showingDialog = false
                                 newName = ""
                             } else {
-                                Toast.makeText(context, "Ya existe una playlist con ese nombre", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "This playlist already exists", Toast.LENGTH_SHORT).show()
                             }
                         }
-                    }) { Text("Crear") }
+                    }) { Text("Create") }
                 },
                 dismissButton = {
-                    Button(onClick = { showingDialog = false }) { Text("Cancelar") }
+                    Button(onClick = { showingDialog = false }) { Text("Cancel") }
                 }
             )
         }
@@ -256,9 +253,9 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
             val original = editingName!!
             AlertDialog(
                 onDismissRequest = { editingName = null },
-                title = { Text("Editar nombre") },
+                title = { Text("Edit name") },
                 text = {
-                    TextField(value = editText, onValueChange = { editText = it }, placeholder = { Text("Nuevo nombre") })
+                    TextField(value = editText, onValueChange = { editText = it }, placeholder = { Text("New name") })
                 },
                 confirmButton = {
                     Button(onClick = {
@@ -268,15 +265,15 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                             if (ok) {
                                 playlists = PlaylistStore.loadAll(context).keys.toList()
                                 editingName = null
-                                Toast.makeText(context, "Renombrada a '$newN'", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Renamed to '$newN'", Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "No se pudo renombrar (ya existe o error)", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Error renaming the playlist", Toast.LENGTH_SHORT).show()
                             }
                         }
-                    }) { Text("Guardar") }
+                    }) { Text("Save") }
                 },
                 dismissButton = {
-                    Button(onClick = { editingName = null }) { Text("Cancelar") }
+                    Button(onClick = { editingName = null }) { Text("Cancel") }
                 }
             )
         }
@@ -284,7 +281,7 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
         // Generic options sheet for playlist actions (edit name / modify image / delete)
         if (showPlaylistOptions) {
             GenericOptionsSheet(
-                visible = showPlaylistOptions,
+                visible = true,
                 onDismiss = { showPlaylistOptions = false; selectedMenuPlaylist = null },
                 headerContent = {
                     val p = selectedMenuPlaylist ?: ""

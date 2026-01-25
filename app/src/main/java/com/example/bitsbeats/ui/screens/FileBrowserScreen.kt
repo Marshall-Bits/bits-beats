@@ -11,16 +11,9 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -62,15 +54,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.core.content.ContextCompat
 import com.example.bitsbeats.data.AudioFile
 import com.example.bitsbeats.data.FileItem
@@ -117,7 +107,7 @@ fun FileBrowserScreen(
     var selectedAudioUri by remember { mutableStateOf<String?>(null) }
     var selectedAudioTitle by remember { mutableStateOf("") }
     var selectedAudioArtist by remember { mutableStateOf("") }
-    var selectedAudioDuration by remember { mutableStateOf(0L) }
+    var selectedAudioDuration by remember { mutableLongStateOf(0L) }
 
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var showCreatePlaylistForSingleDialog by remember { mutableStateOf(false) }
@@ -186,9 +176,9 @@ fun FileBrowserScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (!showFileBrowser) "Canciones Recientes" else File(currentPath).name.takeIf { it.isNotBlank() }
+                        text = if (!showFileBrowser) "Recent tracks" else File(currentPath).name.takeIf { it.isNotBlank() }
                             ?.let { if (it.length > 20) it.take(17) + "..." else it } // Limit folder name length with ellipsis
-                            ?: "Almacenamiento",
+                            ?: "Storage",
                         color = Color.White
                     )
                 },
@@ -205,11 +195,11 @@ fun FileBrowserScreen(
                                 showFileBrowser = false
                             } else {
                                 val parentPath = File(currentPath).parent
-                                if (parentPath != null && parentPath.startsWith(activeRoot)) {
-                                    currentPath = parentPath
+                                currentPath = if (parentPath != null && parentPath.startsWith(activeRoot)) {
+                                    parentPath
                                 } else {
                                     // fallback: jump to active root
-                                    currentPath = activeRoot
+                                    activeRoot
                                 }
                             }
                         } else {
@@ -218,7 +208,7 @@ fun FileBrowserScreen(
                     }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Atrás",
+                            contentDescription = "Back",
                             tint = Color.White
                         )
                     }
@@ -244,11 +234,11 @@ fun FileBrowserScreen(
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Folder,
-                            contentDescription = "Explorar",
+                            contentDescription = "Explore",
                             tint = Color(0xFFFFD54F)
                         )
                     }
-                    // "Añadir todo" icon: only visible when browsing and current directory has audio files
+                    // "Add all" icon: only visible when browsing and current directory has audio files
                     if (showFileBrowser && files.any { it.isAudio }) {
                         IconButton(onClick = {
                             // load playlists when opening dialog
@@ -257,7 +247,7 @@ fun FileBrowserScreen(
                         }) {
                             Icon(
                                 imageVector = Icons.Filled.Add,
-                                contentDescription = "Añadir todo",
+                                contentDescription = "Add all",
                                 tint = Color.White
                             )
                         }
@@ -273,8 +263,8 @@ fun FileBrowserScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text("Se necesita permiso para acceder a los archivos", color = Color.White)
-                    Button(onClick = { permissionLauncher.launch(permission) }) { Text("Conceder permiso") }
+                    Text("Permission required to access data", color = Color.White)
+                    Button(onClick = { permissionLauncher.launch(permission) }) { Text("Authorize") }
                 }
                 return@Column
             }
@@ -338,7 +328,7 @@ fun FileBrowserScreen(
                             Column(modifier = Modifier.weight(1f).clickable { onFileSelected(audio.id) }) {
                                 Text(audio.title, color = Color.White)
                                 Text(
-                                    audio.artist.ifEmpty { "Artista desconocido" },
+                                    audio.artist.ifEmpty { "Unknown artist" },
                                     color = Color.LightGray
                                 )
                             }
@@ -360,13 +350,13 @@ fun FileBrowserScreen(
                                     )
                                     Toast.makeText(
                                         context,
-                                        "Añadida a $addToPlaylistName",
+                                        "Add to $addToPlaylistName",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }) {
                                     Icon(
                                         imageVector = Icons.Filled.Add,
-                                        contentDescription = "Añadir",
+                                        contentDescription = "Add",
                                         tint = Color.White
                                     )
                                 }
@@ -387,7 +377,7 @@ fun FileBrowserScreen(
                                  }) {
                                     Icon(
                                         imageVector = Icons.Filled.MoreVert,
-                                        contentDescription = "Opciones",
+                                        contentDescription = "Options",
                                         tint = Color.White
                                     )
                                 }
@@ -473,7 +463,7 @@ fun FileBrowserScreen(
 
                             Column(modifier = Modifier.weight(1f).clickable {
                             if (fileItem.isDirectory) currentPath = fileItem.path else if (fileItem.isAudio) {
-                                if (resolvedId != null) onFileSelected(resolvedId) else Toast.makeText(context, "No indexado en MediaStore", Toast.LENGTH_SHORT).show()
+                                if (resolvedId != null) onFileSelected(resolvedId) else Toast.makeText(context, "Not indexed in MediaStore", Toast.LENGTH_SHORT).show()
                             }
                         }) {
                                 Text(fileItem.name, color = Color.White)
@@ -523,23 +513,23 @@ fun FileBrowserScreen(
                                         )
                                         Toast.makeText(
                                             context,
-                                            "Añadida a $addToPlaylistName",
+                                            "Added to $addToPlaylistName",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     } else Toast.makeText(
                                         context,
-                                        "No indexado",
+                                        "Not indexed",
                                         Toast.LENGTH_SHORT
                                     )
                                         .show()
                                 }) {
                                     Icon(
                                         imageVector = Icons.Filled.Add,
-                                        contentDescription = "Añadir",
+                                        contentDescription = "Add",
                                         tint = Color.White
                                     )
                                 }
-                            } else if (fileItem.isAudio && addToPlaylistName == null) {
+                            } else if (fileItem.isAudio) {
                                 // three-dot options for single file when not in add mode
                                 IconButton(onClick = {
                                     // build selected metadata and open options
@@ -588,7 +578,7 @@ fun FileBrowserScreen(
                                  }) {
                                     Icon(
                                         imageVector = Icons.Filled.MoreVert,
-                                        contentDescription = "Opciones",
+                                        contentDescription = "Options",
                                         tint = Color.White
                                     )
                                 }
@@ -617,7 +607,7 @@ fun FileBrowserScreen(
                             }
                         } else {
                             Column {
-                                Text("Selecciona una playlist:")
+                                Text("Select a playlist:")
                                 Spacer(modifier = Modifier.height(8.dp))
                                 // simple vertical list of buttons to pick playlist
                                 playlists.forEach { p ->
@@ -675,7 +665,7 @@ fun FileBrowserScreen(
                                             }
                                             Toast.makeText(
                                                 context,
-                                                "Añadidas ${toAdd.size} canciones a '$p'",
+                                                "Add ${toAdd.size} songs to '$p'",
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                             showAddAllDialog = false
@@ -687,7 +677,7 @@ fun FileBrowserScreen(
                                 Button(
                                     onClick = { showCreatePlaylistDialog = true },
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text("Crear nueva playlist") }
+                                ) { Text("Create new playlist") }
                             }
                         }
                     },
@@ -701,13 +691,13 @@ fun FileBrowserScreen(
             if (showCreatePlaylistDialog) {
                 AlertDialog(
                     onDismissRequest = { showCreatePlaylistDialog = false },
-                    title = { Text("Nombre de la playlist") },
+                    title = { Text("Playlist name") },
                     text = {
                         Column {
                             TextField(
                                 value = newPlaylistName,
                                 onValueChange = { newPlaylistName = it },
-                                placeholder = { Text("Nombre") })
+                                placeholder = { Text("Name") })
                         }
                     },
                     confirmButton = {
@@ -768,7 +758,7 @@ fun FileBrowserScreen(
                                     }
                                     Toast.makeText(
                                         context,
-                                        "Añadidas ${toAdd.size} canciones a '$name'",
+                                        "Added ${toAdd.size} songs to '$name'",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                     showCreatePlaylistDialog = false
@@ -777,32 +767,31 @@ fun FileBrowserScreen(
                                 } else {
                                     Toast.makeText(
                                         context,
-                                        "Ya existe una playlist con ese nombre",
+                                        "This playlist already exists",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             }
-                        }) { Text("Crear y añadir") }
+                        }) { Text("Create and add") }
                     },
                     dismissButton = {
-                        Button(onClick = { showCreatePlaylistDialog = false }) { Text("Cancelar") }
+                        Button(onClick = { showCreatePlaylistDialog = false }) { Text("Cancel") }
                     }
                 )
             }
 
-            // Playlist picker implemented with GenericOptionsSheet: includes top 'Crear nueva playlist' and list of existing playlists with trailing + button
             if (showAddToPlaylistDialog) {
                 GenericOptionsSheet(
-                    visible = showAddToPlaylistDialog,
+                    visible = true,
                     onDismiss = { showAddToPlaylistDialog = false },
                     headerContent = {
                         // title
-                        Text(text = "Añadir a la playlist", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                        Text(text = "Add to playlist", color = Color.White, style = MaterialTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.height(8.dp))
                     },
                     options = buildList {
                         // create-new option (non-clickable row that triggers the create dialog when clicked)
-                        add(GenericOptionItem(label = "Crear nueva playlist", icon = Icons.Filled.Add, onClick = {
+                        add(GenericOptionItem(label = "Create new playlist", icon = Icons.Filled.Add, onClick = {
                             showCreatePlaylistForSingleDialog = true
                         }))
 
@@ -816,16 +805,16 @@ fun FileBrowserScreen(
                                     rowClickable = false,
                                     onClick = {},
                                     trailingContent = {
-                                        androidx.compose.material3.IconButton(onClick = {
+                                        IconButton(onClick = {
                                             try {
                                                 val uri = selectedAudioUri ?: ""
                                                 PlaylistStore.addItemToPlaylist(context, p, uri, selectedAudioTitle, selectedAudioArtist, selectedAudioDuration)
-                                                Toast.makeText(context, "Añadida a '$p'", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "Added to '$p'", Toast.LENGTH_SHORT).show()
                                             } catch (_: Exception) { }
                                             showAddToPlaylistDialog = false
                                         }) {
-                                            Box(modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), shape = androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-                                                androidx.compose.material3.Icon(imageVector = Icons.Filled.Add, contentDescription = "Añadir")
+                                            Box(modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), shape = CircleShape), contentAlignment = Alignment.Center) {
+                                               Icon(imageVector = Icons.Filled.Add, contentDescription = "Add")
                                             }
                                         }
                                     }
@@ -840,13 +829,13 @@ fun FileBrowserScreen(
             if (showCreatePlaylistForSingleDialog) {
                 AlertDialog(
                     onDismissRequest = { showCreatePlaylistForSingleDialog = false },
-                    title = { Text("Nombre de la playlist") },
+                    title = { Text("Playlist name") },
                     text = {
                         Column {
                             TextField(
                                 value = newPlaylistNameForSingle,
                                 onValueChange = { newPlaylistNameForSingle = it },
-                                placeholder = { Text("Nombre") })
+                                placeholder = { Text("Name") })
                         }
                     },
                     confirmButton = {
@@ -867,7 +856,7 @@ fun FileBrowserScreen(
                                         )
                                         Toast.makeText(
                                             context,
-                                            "Añadida a '$name'",
+                                            "Added to '$name'",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     } catch (_: Exception) {
@@ -878,17 +867,17 @@ fun FileBrowserScreen(
                                 } else {
                                     Toast.makeText(
                                         context,
-                                        "Ya existe una playlist con ese nombre",
+                                        "This playlist already exists",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             }
-                        }) { Text("Crear y añadir") }
+                        }) { Text("Create and add") }
                     },
                     dismissButton = {
                         Button(onClick = {
                             showCreatePlaylistForSingleDialog = false
-                        }) { Text("Cancelar") }
+                        }) { Text("Cancel") }
                     }
                 )
             }
@@ -916,13 +905,13 @@ fun FileBrowserScreen(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(selectedAudioTitle.ifEmpty { "Sin título" }, color = Color.White)
-                        Text(selectedAudioArtist.ifEmpty { "Artista desconocido" }, color = Color.LightGray)
+                        Text(selectedAudioTitle.ifEmpty { "No title" }, color = Color.White)
+                        Text(selectedAudioArtist.ifEmpty { "Unknown artist" }, color = Color.LightGray)
                     }
                 }
             },
             options = listOf(
-                GenericOptionItem(label = "Añadir a playlist", icon = Icons.AutoMirrored.Filled.PlaylistAdd, onClick = {
+                GenericOptionItem(label = "Add to playlist", icon = Icons.AutoMirrored.Filled.PlaylistAdd, onClick = {
                     playlists = PlaylistStore.loadAll(context).keys.toList()
                     showAddToPlaylistDialog = true
                 })
