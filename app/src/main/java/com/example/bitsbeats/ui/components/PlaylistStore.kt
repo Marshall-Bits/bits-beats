@@ -113,6 +113,14 @@ object PlaylistStore {
         saveAll(context, all)
     }
 
+    fun removeItemFromPlaylist(context: Context, playlistName: String, uri: String) {
+        val all = loadAll(context).toMutableMap()
+        val list = all[playlistName]?.toMutableList() ?: return
+        list.removeIf { it["uri"] == uri }
+        all[playlistName] = list
+        saveAll(context, all)
+    }
+
     fun getPlaylist(context: Context, name: String): List<Map<String, Any>> {
         return loadAll(context)[name] ?: emptyList()
     }

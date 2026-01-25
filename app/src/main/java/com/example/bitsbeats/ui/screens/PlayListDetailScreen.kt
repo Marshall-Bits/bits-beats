@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,6 +64,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
 
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
 @OptIn(ExperimentalMaterial3Api::class)
@@ -361,6 +363,17 @@ fun PlaylistDetailScreen(
                             text = formatDuration((item["duration"] as? Long) ?: 0L),
                             color = Color.LightGray
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(modifier = Modifier.size(36.dp).background(Color.Black).border(2.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                            IconButton(onClick = {
+                                val uri = item["uri"] as? String ?: ""
+                                PlaylistStore.removeItemFromPlaylist(context, playlistName, uri)
+                                items = PlaylistStore.getPlaylist(context, playlistName)
+                                Toast.makeText(context, "Removida de $playlistName", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(imageVector = Icons.Filled.Remove, contentDescription = "Quitar", tint = Color.White)
+                            }
+                        }
                     }
                 }
                 item{
