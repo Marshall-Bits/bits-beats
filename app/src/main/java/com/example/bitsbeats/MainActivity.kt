@@ -1,6 +1,8 @@
 package com.example.bitsbeats
 
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
 import java.net.URLEncoder
 import java.net.URLDecoder
 import androidx.activity.ComponentActivity
@@ -57,6 +59,13 @@ import com.example.bitsbeats.ui.screens.PlaylistScreen
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Request notification permission on Android 13+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
         enableEdgeToEdge()
         setContent {
             BitsBeatsTheme {

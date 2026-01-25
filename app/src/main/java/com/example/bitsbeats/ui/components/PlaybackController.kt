@@ -2,8 +2,10 @@ package com.example.bitsbeats.ui.components
 
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import androidx.core.net.toUri
 import androidx.core.content.edit
@@ -20,6 +22,7 @@ import org.json.JSONObject
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import java.io.File
+import java.util.concurrent.CopyOnWriteArraySet
 
 // Central playback controller shared across screens (manages MediaPlayer & observable state)
 object PlaybackController {
@@ -42,6 +45,78 @@ object PlaybackController {
     // queue management: list of track URIs (strings) and current index
     var queue by mutableStateOf<List<String>>(emptyList())
     var queueIndex by mutableIntStateOf(-1)
+
+    // --- Listener API ---
+    interface PlaybackStateListener {
+        fun onPlaybackStateChanged(snapshot: PlaybackStateSnapshot)
+    }
+
+    data class PlaybackStateSnapshot(
+        val currentUri: String?,
+        val title: String,
+        val artist: String,
+        val isPlaying: Boolean,
+        val currentPosition: Long,
+        val duration: Long,
+        val queue: List<String>,
+        val queueIndex: Int,
+        val repeatMode: RepeatMode,
+        val shuffleEnabled: Boolean,
+        val activePlaylistName: String?
+    )
+
+    private val listeners = CopyOnWriteArraySet<PlaybackStateListener>()
+
+    fun addStateListener(listener: PlaybackStateListener) {
+        listeners.add(listener)
+        // immediately notify with current snapshot
+        try { listener.onPlaybackStateChanged(snapshot()) } catch (e: Exception) { }
+    }
+
+    fun removeStateListener(listener: PlaybackStateListener) {
+        listeners.remove(listener)
+    }
+
+    private fun snapshot(): PlaybackStateSnapshot {
+        return PlaybackStateSnapshot(
+            currentUri = currentUri,
+            title = title,
+            artist = artist,
+            isPlaying = isPlaying,
+            currentPosition = currentPosition,
+            duration = duration,
+            queue = queue,
+            queueIndex = queueIndex,
+            repeatMode = repeatMode,
+            shuffleEnabled = shuffleEnabled,
+            activePlaylistName = activePlaylistName
+        )
+    }
+
+    private fun ensureServiceStartedIfNeeded(s: PlaybackStateSnapshot) {
+        if (!s.isPlaying) return
+        val ctx = appContext ?: return
+        try {
+            val intent = Intent(ctx, com.example.bitsbeats.MediaPlaybackService::class.java)
+            // choose correct start method depending on API level
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try { ctx.startForegroundService(intent) } catch (e: Exception) { ctx.startService(intent) }
+            } else {
+                try { ctx.startService(intent) } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {
+            // ignore failures to start service
+        }
+    }
+
+    private fun notifyStateChanged() {
+        val s = snapshot()
+        // start service when necessary (safe to call repeatedly)
+        ensureServiceStartedIfNeeded(s)
+        for (l in listeners) {
+            try { l.onPlaybackStateChanged(s) } catch (_: Exception) {}
+        }
+    }
 
     private var mediaPlayer: MediaPlayer? = null
     private var tickerJob: Job? = null
@@ -69,6 +144,7 @@ object PlaybackController {
         appContext = context.applicationContext
         saveState(context) // persist queue immediately
         playCurrentFromQueue()
+        notifyStateChanged()
     }
 
     private fun playCurrentFromQueue() {
@@ -77,6 +153,7 @@ object PlaybackController {
         if (idx < 0 || idx >= queue.size) {
             // nothing to play
             stopPlayback()
+            notifyStateChanged()
             return
         }
         val uriStr = queue[idx]
@@ -130,6 +207,17 @@ object PlaybackController {
                 currentUri = uri.toString()
                 isPlaying = true
                 mp.start()
+
+                // Start MediaPlaybackService immediately to reduce race where notification/session aren't ready
+                try {
+                    val svcIntent = android.content.Intent(context.applicationContext, com.example.bitsbeats.MediaPlaybackService::class.java)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        try { context.applicationContext.startForegroundService(svcIntent) } catch (_: Exception) { context.applicationContext.startService(svcIntent) }
+                    } else {
+                        try { context.applicationContext.startService(svcIntent) } catch (_: Exception) {}
+                    }
+                } catch (_: Exception) {}
+
                 // on completion advance to next in queue
                 mp.setOnCompletionListener {
                     // handle completion depending on repeat mode
@@ -152,8 +240,10 @@ object PlaybackController {
             }
 
             saveState(context)
+            notifyStateChanged()
         } catch (_: Exception) {
             isPlaying = false
+            notifyStateChanged()
         }
     }
 
@@ -170,11 +260,13 @@ object PlaybackController {
         }
         // persist play state
         appContext?.let { saveState(it) }
+        notifyStateChanged()
     }
 
     fun seekTo(ms: Int) {
         try { mediaPlayer?.seekTo(ms); currentPosition = ms.toLong() } catch (_: Exception) {}
         appContext?.let { saveState(it) }
+        notifyStateChanged()
     }
 
     private fun startTicker() {
@@ -185,6 +277,7 @@ object PlaybackController {
                 // persist occasionally (every 1s)
                 saveState(appContext)
                 delay(1000)
+                notifyStateChanged()
             }
         }
     }
@@ -203,6 +296,7 @@ object PlaybackController {
             queueIndex += 1
             appContext?.let { saveState(it) }
             playCurrentFromQueue()
+            notifyStateChanged()
             return
         }
 
@@ -214,6 +308,7 @@ object PlaybackController {
                     queueIndex = 0
                     appContext?.let { saveState(it) }
                     playCurrentFromQueue()
+                    notifyStateChanged()
                 }
             }
             else -> {
@@ -227,13 +322,16 @@ object PlaybackController {
         if (queue.isEmpty()) return
         if (currentPosition > 3000) {
             seekTo(0)
+            notifyStateChanged()
         } else {
             if (queueIndex > 0) {
                 queueIndex -= 1
                 appContext?.let { saveState(it) }
                 playCurrentFromQueue()
+                notifyStateChanged()
             } else {
                 seekTo(0)
+                notifyStateChanged()
             }
         }
     }
@@ -252,6 +350,7 @@ object PlaybackController {
         appContext?.let { ctx ->
             try { ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { remove(KEY_LAST_STATE) } } catch (_: Exception) {}
         }
+        notifyStateChanged()
     }
 
     // Persist playback state (queue, index, position, isPlaying)
@@ -324,6 +423,7 @@ object PlaybackController {
                 currentUri = queue[queueIndex]
                 // keep paused on restore (user must press play)
                 isPlaying = false
+                notifyStateChanged()
             } catch (_: Exception) {
                 // if prepare fails, clear
                 stopPlayback()
@@ -336,6 +436,7 @@ object PlaybackController {
         try { mediaPlayer?.release() } catch (_: Exception) {}
         mediaPlayer = null
         isPlaying = false
+        notifyStateChanged()
     }
 
     /** Public helper to clear playback state (stop, clear queue, clear active playlist) */
@@ -360,6 +461,7 @@ object PlaybackController {
 
             // persist cleared state
             appContext?.let { saveState(it) }
+            notifyStateChanged()
         } catch (_: Exception) {}
     }
 
@@ -371,12 +473,14 @@ object PlaybackController {
             RepeatMode.REPEAT_ONE -> RepeatMode.OFF
         }
         appContext?.let { saveState(it) }
+        notifyStateChanged()
     }
 
     /** Set repeat mode explicitly (renamed to avoid JVM signature clash with generated property setter) */
     fun applyRepeatMode(mode: RepeatMode) {
         repeatMode = mode
         appContext?.let { saveState(it) }
+        notifyStateChanged()
     }
 
     // shuffle flag
@@ -392,5 +496,6 @@ object PlaybackController {
             queueIndex = 0
         }
         appContext?.let { saveState(it) }
+        notifyStateChanged()
     }
 }
