@@ -1,25 +1,11 @@
-# Documentación interna: arquitectura, convenciones y recursos
-
-Objetivo
-- Documentar la arquitectura del proyecto BitsBeats y dejar reglas, convenciones y recomendaciones claras para futuros cambios: dónde poner código, qué patrones seguir, qué recursos/librerías se usan hoy y qué alternativas modernas/probadas se recomiendan.
 
 Resumen rápido (one-liner)
 - App Android en Kotlin + Jetpack Compose que reproduce audio del dispositivo, gestiona playlists y navegación; la arquitectura debe separar UI (composables), controladores/estado (PlaybackController / ViewModel) y capa de datos (MediaRepository / FileRepository / PlaylistStore).
-
-Checklist (qué incluye este archivo)
-- [x] Mapa de carpetas y paquetes recomendados
-- [x] Capas y responsabilidades (UI / Domain / Data / Storage)
-- [x] Estado y reproducción (PlaybackController vs ViewModel; recomendaciones)
-- [x] Navegación y miniplayer
-- [x] Persistencia y formato (playlists, última pista, posición)
-- [x] Permisos y MediaStore (Android 13+) y URIs vs audioId
-- [x] Librerías actuales detectadas y recomendaciones de reemplazo/versión
-- [x] Pruebas, lint, CI y mantenimiento
-- [x] Reglas de estilo y naming (breve)
  
 Reglas operativas
-- Nunca eliminar imports: no borrar automáticamente líneas de import durante refactors o limpiezas; si un import parece no usado, revisarlo manualmente (asegurar que no rompe referencias en otros ficheros) y eliminarlo solo tras comprobar que el proyecto compila.
-- Comprobación obligatoria antes de finalizar una tarea: siempre ejecutar una verificación de errores (por ejemplo `get_errors` o un `Gradle build`) y confirmar que no quedan errores de compilación o importación antes de cerrar la tarea o hacer merge.
+- Nunca eliminar imports: no borrar automáticamente líneas de import durante refactors o limpiezas; si un import parece no usado, se revisará manualmente.
+- Ejecutar siempre una verificación de errores `get_errors` y confirmar que no quedan errores de compilación o importación antes de cerrar la tarea o hacer merge.
+- No usar `Gradle build` nunca.
 
 1) Estructura de ficheros y paquetes recomendada
 - Raíz: `app/src/main/java/com/example/bitsbeats/`
@@ -36,8 +22,7 @@ Reglas operativas
   - `data.playlist` -> `PlaylistStore.kt` (persistencia de playlists)
 - Utilidades / helpers:
   - `util` -> `TimeUtils.kt`, permisos, Uri helpers
-- Tests:
-  - `src/test/java/...` y `src/androidTest/java/...`
+
 
 2) Capas y responsabilidades (separación de preocupaciones)
 - UI (Composables): mostrar estado puro y enviar eventos. No realizar consultas de I/O o llamar MediaPlayer directamente.
@@ -127,20 +112,6 @@ APIs a evitar / obsoletas / notas
 - Evitar usar file-system absolute paths y manipular `Environment.getExternalStorageDirectory()` (scoped storage). Usa Storage Access Framework o MediaStore + SAF.
 - Evitar dependencias antiguas de soporte libs; usar AndroidX actualizadas.
 
-8) Testing y QA
-- Unit tests:
-  - Testear lógica de `PlaybackController` y `PlaylistStore` (mockear repositorios y SharedPreferences/DataStore).
-- Instrumented tests:
-  - Pequeñas pruebas de UI con Compose Testing (compose-test) para pantallas clave.
-- Lint / static checks: habilitar Ktlint / detekt y Android Lint en CI.
-
-9) CI / Repositorio / calidad
-- Recomendado: pipeline CI (GitHub Actions / GitLab CI) con pasos:
-  - Gradle build (assembleDebug) y unit tests
-  - Android lint
-  - Opcional: run compose UI tests on emulators (más lento)
-- Pre-commit hooks: ktlint autoformat.
-
 10) Reglas de estilo y convenciones (breve)
 - Nombre de ficheros: `XxxScreen.kt`, `XxxViewModel.kt`, `PlaybackController.kt`, `MediaRepository.kt`.
 - Cada archivo contiene una responsabilidad única (single responsibility). Mantener composables pequeños (<200 LOC si es posible).
@@ -160,18 +131,6 @@ Comportamiento del botón Playlists en la navegación inferior
 - Especificación: el icono/entrada "Playlists" del bottom navigation debe comportarse así:
   - Si existe una playlist activa (`PlaybackController.activePlaylistName` no es null/blank): navegar directamente a `PlaylistDetailScreen` de esa playlist (ruta `playlistDetail/{name}` codificada con URLEncoder).
   - En caso contrario: navegar a la pantalla de listado de playlists (`PlaylistScreen`).
-
-Implementación sugerida (fragmento en `MainActivity` al pulsar el botón):
-
-```kotlin
-val active = PlaybackController.activePlaylistName
-if (!active.isNullOrBlank()) {
-    val enc = URLEncoder.encode(active, "UTF-8")
-    navController.navigate("playlistDetail/$enc")
-} else {
-    navController.navigate("playlist")
-}
-```
 
 Notas operativas
 - Asegúrate de que todas las partes de la app que inician la reproducción desde una playlist (por ejemplo `PlaylistDetailScreen`) llamen a `playQueue(..., playlistName = name)` en vez de solo `playQueue(...)`. Si no se pasa `playlistName`, la app no podrá saber cuál es la playlist activa.
