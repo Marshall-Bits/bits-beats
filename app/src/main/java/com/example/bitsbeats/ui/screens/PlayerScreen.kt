@@ -153,8 +153,9 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
                         Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (isPlaying) "Pausar" else "Reproducir", modifier = Modifier.size(48.dp), tint = Color.Black)
                     }
 
-                    IconButton(onClick = { PlaybackController.nextTrack() }, modifier = Modifier.size(64.dp)) {
-                        Icon(Icons.Filled.SkipNext, contentDescription = "Siguiente canción", modifier = Modifier.size(48.dp), tint = Color.White)
+                    val hasNext = PlaybackController.queueIndex + 1 < PlaybackController.queue.size || (PlaybackController.repeatMode == PlaybackController.RepeatMode.REPEAT_ALL && PlaybackController.queue.isNotEmpty())
+                    IconButton(onClick = { PlaybackController.nextTrack() }, enabled = hasNext, modifier = Modifier.size(64.dp)) {
+                        Icon(Icons.Filled.SkipNext, contentDescription = "Siguiente canción", modifier = Modifier.size(48.dp), tint = if (hasNext) Color.White else Color.Gray)
                     }
                 }
 
