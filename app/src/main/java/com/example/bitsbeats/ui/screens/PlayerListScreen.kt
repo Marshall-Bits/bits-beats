@@ -313,17 +313,17 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                     }
                 },
                 options = listOf(
-                    GenericOptionItem(label = "Editar nombre", icon = Icons.Filled.Edit, onClick = {
+                    GenericOptionItem(label = "Edit name", icon = Icons.Filled.Edit, onClick = {
                         editingName = selectedMenuPlaylist
                         editText = selectedMenuPlaylist ?: ""
                         showPlaylistOptions = false
                     }),
-                    GenericOptionItem(label = "Modificar imagen", icon = Icons.Filled.Image, onClick = {
+                    GenericOptionItem(label = "Edit image", icon = Icons.Filled.Image, onClick = {
                         // launch image picker; keep selectedMenuPlaylist set
                         imageLauncher.launch(arrayOf("image/*"))
                         showPlaylistOptions = false
                     }),
-                    GenericOptionItem(label = "Eliminar playlist", icon = Icons.Filled.Delete, iconTint = Color(0xFFFF6B6B), onClick = {
+                    GenericOptionItem(label = "Delete playlist", icon = Icons.Filled.Delete, iconTint = Color(0xFFFF6B6B), onClick = {
                         playlistToDelete = selectedMenuPlaylist
                         showPlaylistOptions = false
                     })

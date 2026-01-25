@@ -605,15 +605,15 @@ fun FileBrowserScreen(
             if (showAddAllDialog) {
                 AlertDialog(
                     onDismissRequest = { showAddAllDialog = false },
-                    title = { Text("Añadir todas las canciones") },
+                    title = { Text("Add all songs") },
                     text = {
                         if (playlists.isEmpty()) {
                             Column {
-                                Text("No tienes playlists. Puedes crear una nueva:")
+                                Text("Yo don't have any playlist. Create a new one:")
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Button(onClick = {
                                     showCreatePlaylistDialog = true
-                                }) { Text("Crear nueva playlist") }
+                                }) { Text("New playlist") }
                             }
                         } else {
                             Column {
@@ -692,7 +692,7 @@ fun FileBrowserScreen(
                         }
                     },
                     confirmButton = {
-                        Button(onClick = { showAddAllDialog = false }) { Text("Cerrar") }
+                        Button(onClick = { showAddAllDialog = false }) { Text("Close") }
                     }
                 )
             }

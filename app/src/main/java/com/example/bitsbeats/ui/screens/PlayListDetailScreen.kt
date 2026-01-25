@@ -64,7 +64,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.border
 
 // Playlist detail screen: list songs, play entire playlist sequentially, add songs
 @OptIn(ExperimentalMaterial3Api::class)
@@ -342,11 +341,11 @@ fun PlaylistDetailScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = item["title"] as? String ?: "Desconocido",
+                                text = item["title"] as? String ?: "Unknown Title",
                                 color = Color.White
                             )
                             Text(
-                                text = item["artist"] as? String ?: "Artista desconocido",
+                                text = item["artist"] as? String ?: "Unknown Artist",
                                 color = Color.LightGray
                             )
                         }
@@ -355,14 +354,14 @@ fun PlaylistDetailScreen(
                             color = Color.LightGray
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Box(modifier = Modifier.size(36.dp).background(Color.Black).border(2.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), CircleShape), contentAlignment = Alignment.Center) {
                             IconButton(onClick = {
                                 val uri = item["uri"] as? String ?: ""
                                 PlaylistStore.removeItemFromPlaylist(context, playlistName, uri)
                                 items = PlaylistStore.getPlaylist(context, playlistName)
-                                Toast.makeText(context, "Removida de $playlistName", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Deleted from $playlistName", Toast.LENGTH_SHORT).show()
                             }) {
-                                Icon(imageVector = Icons.Filled.Remove, contentDescription = "Quitar", tint = Color.White)
+                                Icon(imageVector = Icons.Filled.Remove, contentDescription = "Delete", tint = Color.Black)
                             }
                         }
                     }
