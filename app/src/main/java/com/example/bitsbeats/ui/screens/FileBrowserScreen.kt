@@ -156,8 +156,12 @@ fun FileBrowserScreen(
         .background(Color(0xFF010000))) {
         TopAppBar(
             title = {
-                Text(text = if (!showFileBrowser) "Canciones Recientes" else File(currentPath).name.takeIf { it.isNotBlank() }
-                    ?: "Almacenamiento", color = Color.White)
+                Text(
+                    text = if (!showFileBrowser) "Canciones Recientes" else File(currentPath).name.takeIf { it.isNotBlank() }
+                        ?.let { if (it.length > 20) it.take(17) + "..." else it } // Limit folder name length with ellipsis
+                        ?: "Almacenamiento",
+                    color = Color.White
+                )
             },
             navigationIcon = {
                 IconButton(onClick = {
@@ -256,7 +260,6 @@ fun FileBrowserScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color.Gray, shape = RoundedCornerShape(12.dp))
                             .clickable { onFileSelected(audio.id) }
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -347,10 +350,6 @@ fun FileBrowserScreen(
                                     ).show()
                                 }
                             }
-                            .background(
-                                if (fileItem.isDirectory) Color(0xFF4A4A4A) else Color.Gray,
-                                shape = RoundedCornerShape(12.dp)
-                            )
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
