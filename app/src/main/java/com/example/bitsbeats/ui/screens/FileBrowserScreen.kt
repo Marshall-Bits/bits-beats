@@ -111,12 +111,6 @@ fun FileBrowserScreen(
 
     // --- New state for options menu (sheet) and single-item add flow ---
     var showOptionsMenu by remember { mutableStateOf(false) }
-    LaunchedEffect(showOptionsMenu) {
-        if (showOptionsMenu) {
-            Toast.makeText(context, "showOptionsMenu = true", Toast.LENGTH_SHORT).show()
-            Log.d("FileBrowserScreen", "showOptionsMenu = true")
-        }
-    }
     var selectedAudioUri by remember { mutableStateOf<String?>(null) }
     var selectedAudioTitle by remember { mutableStateOf("") }
     var selectedAudioArtist by remember { mutableStateOf("") }
