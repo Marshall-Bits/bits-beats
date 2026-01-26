@@ -228,6 +228,15 @@ class MainActivity : ComponentActivity() {
                         composable("stats") {
                             com.example.bitsbeats.ui.screens.StatsScreen(onBack = { navController.popBackStack() })
                         }
+
+                        // Search screen: live search across MediaStore and file system
+                        composable("search") {
+                            com.example.bitsbeats.ui.screens.SearchScreen(
+                                onFileSelected = { audioId: Long -> PlaybackController.playAudioId(appContext, audioId) },
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+
                     }
 
                     // Mini player overlay: show on all screens except the PlayerScreen route, with slide up/down animations
@@ -313,7 +322,7 @@ class MainActivity : ComponentActivity() {
                             // Search (unused for now)
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { /* no-op */ }) {
+                                modifier = Modifier.clickable { navController.navigate("search") }) {
                                 Icon(
                                     imageVector = Icons.Filled.Search,
                                     contentDescription = "Buscar",

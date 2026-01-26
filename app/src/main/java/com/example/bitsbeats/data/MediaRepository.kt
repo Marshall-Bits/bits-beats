@@ -85,4 +85,51 @@ object MediaRepository {
         }
         return null
     }
+
+    // Search MediaStore by title or artist using LIKE (case-insensitive). Returns up to `limit` items.
+    fun searchByTitleOrArtist(contentResolver: ContentResolver, query: String, limit: Int = 200): List<AudioFile> {
+        val q = query.trim()
+        if (q.isEmpty()) return emptyList()
+
+        val like = "%${q.replace("%", "\\%").replace("_", "\\_")}%"
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.DURATION
+        )
+
+        val selection = "(${MediaStore.Audio.Media.TITLE} LIKE ? OR ${MediaStore.Audio.Media.ARTIST} LIKE ?) AND ${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        val selectionArgs = arrayOf(like, like)
+        val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC LIMIT $limit"
+
+        val results = mutableListOf<AudioFile>()
+        try {
+            contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                sortOrder
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val title = cursor.getString(titleColumn) ?: "Desconocido"
+                    val artistRaw = cursor.getString(artistColumn)
+                    val artist = if (artistRaw.isNullOrEmpty() || artistRaw == "<unknown>") "" else artistRaw
+                    val duration = cursor.getLong(durationColumn)
+                    results.add(AudioFile(id, title, artist, duration))
+                }
+            }
+        } catch (_: Exception) {
+            // ignore query failures
+        }
+
+        return results
+    }
 }

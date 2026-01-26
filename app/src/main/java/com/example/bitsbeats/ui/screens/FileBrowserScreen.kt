@@ -148,6 +148,172 @@ private fun AnimatedAddButton(
     }
 }
 
+// Extracted FileList composable reused by FileBrowserScreen and SearchScreen
+@Composable
+fun FileList(
+    files: List<FileItem> = emptyList(),
+    audioFiles: List<AudioFile> = emptyList(),
+    pathToId: Map<String, Long?> = emptyMap(),
+    addToPlaylistName: String? = null,
+    onFileSelected: (Long) -> Unit = { _ -> },
+    onEnterDirectory: (String) -> Unit = { _ -> },
+    onShowOptions: (uri: String, title: String, artist: String, duration: Long) -> Unit = { _, _, _, _ -> }
+) {
+    val context = LocalContext.current
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
+        if (audioFiles.isNotEmpty()) {
+            items(audioFiles) { audio ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val audioUriString = ContentUris.withAppendedId(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        audio.id
+                    ).toString()
+                    var embeddedBitmap by remember(audioUriString) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                    LaunchedEffect(audioUriString) {
+                        embeddedBitmap = try { com.example.bitsbeats.util.loadEmbeddedArtwork(context, audioUriString) } catch (_: Exception) { null }
+                    }
+
+                    if (embeddedBitmap != null) {
+                        Image(
+                            bitmap = embeddedBitmap!!,
+                            contentDescription = "Artwork",
+                            modifier = Modifier.size(48.dp).clip(CircleShape).clickable { onFileSelected(audio.id) }
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
+                            contentDescription = "Default artwork",
+                            modifier = Modifier.size(48.dp).clip(CircleShape).clickable { onFileSelected(audio.id) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Column(modifier = Modifier.weight(1f).clickable { onFileSelected(audio.id) }) {
+                        Text(audio.title, color = Color.White)
+                        Text(audio.artist.ifEmpty { "Unknown artist" }, color = Color.LightGray)
+                    }
+
+                    if (addToPlaylistName != null) {
+                        AnimatedAddButton(tint = Color.White, onAdd = {
+                            try {
+                                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audio.id).toString()
+                                PlaylistStore.addItemToPlaylist(context, addToPlaylistName, uri, audio.title, audio.artist, audio.duration)
+                            } catch (_: Exception) { false }
+                        })
+                    } else {
+                        IconButton(onClick = {
+                            val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audio.id).toString()
+                            onShowOptions(uri, audio.title, audio.artist, audio.duration)
+                        }) {
+                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Options", tint = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (files.isNotEmpty()) {
+            items(files) { fileItem ->
+                val resolvedId = if (fileItem.isAudio) pathToId[fileItem.path] else null
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (fileItem.isDirectory) {
+                        Icon(imageVector = Icons.Filled.Folder, contentDescription = "Folder", tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                    } else if (fileItem.isAudio) {
+                        val uriString = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
+                        var embeddedBitmap by remember(uriString) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                        LaunchedEffect(uriString) { embeddedBitmap = try { com.example.bitsbeats.util.loadEmbeddedArtwork(context, uriString) } catch (_: Exception) { null } }
+
+                        if (embeddedBitmap != null) {
+                            Image(bitmap = embeddedBitmap!!, contentDescription = "Artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
+                        } else {
+                            Image(painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    } else {
+                        Icon(imageVector = Icons.Filled.Folder, contentDescription = "File", tint = Color.LightGray)
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+
+                    Column(modifier = Modifier.weight(1f).clickable {
+                        if (fileItem.isDirectory) onEnterDirectory(fileItem.path) else if (fileItem.isAudio) {
+                            if (resolvedId != null) onFileSelected(resolvedId) else Toast.makeText(context, "Not indexed in MediaStore", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Text(fileItem.name, color = Color.White)
+                    }
+
+                    if (fileItem.isAudio && addToPlaylistName != null) {
+                        AnimatedAddButton(tint = Color.White, onAdd = {
+                            if (resolvedId == null) return@AnimatedAddButton false
+                            try {
+                                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString()
+                                var title = File(fileItem.path).name
+                                var artist = ""
+                                var duration = 0L
+                                try {
+                                    context.contentResolver.query(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId), arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c -> if (c.moveToFirst()) { title = c.getString(0) ?: title; artist = c.getString(1) ?: ""; duration = c.getLong(2) } }
+                                } catch (_: Exception) { /* ignore metadata errors */ }
+
+                                return@AnimatedAddButton PlaylistStore.addItemToPlaylist(context, addToPlaylistName, uri, title, artist, duration)
+                            } catch (_: Exception) { return@AnimatedAddButton false }
+                        })
+                    } else if (fileItem.isAudio) {
+                        val uriString = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
+                        IconButton(onClick = {
+                            // try to fill title/artist/duration when available
+                            var title = File(fileItem.path).name
+                            var artist = ""
+                            var duration = 0L
+                            try {
+                                if (resolvedId != null) {
+                                    context.contentResolver.query(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId), arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c -> if (c.moveToFirst()) { title = c.getString(0) ?: title; artist = c.getString(1) ?: ""; duration = c.getLong(2) } }
+                                } else {
+                                    // try reading metadata from file path
+                                    try {
+                                        val mmr = android.media.MediaMetadataRetriever()
+                                        mmr.setDataSource(fileItem.path)
+                                        title = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE) ?: title
+                                        artist = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
+                                        duration = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                                        mmr.release()
+                                    } catch (_: Exception) {}
+                                }
+                            } catch (_: Exception) {}
+
+                            onShowOptions(uriString, title, artist, duration)
+                        }) {
+                            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Options", tint = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(200.dp)) }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileBrowserScreen(
@@ -186,22 +352,17 @@ fun FileBrowserScreen(
 
     DisposableEffect(Unit) { onDispose { /* nothing local to release */ } }
 
-    val permission =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
-    val permissionLauncher =
-        rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
-            hasPermission = isGranted
-            if (isGranted) {
-                audioFiles = getRecentAudioFiles(context.contentResolver)
-                files = getDirectoryContents(currentPath)
-            }
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+    val permissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
+        hasPermission = isGranted
+        if (isGranted) {
+            audioFiles = getRecentAudioFiles(context.contentResolver)
+            files = getDirectoryContents(currentPath)
         }
+    }
 
     LaunchedEffect(Unit) {
-        hasPermission = ContextCompat.checkSelfPermission(
-            context,
-            permission
-        ) == PackageManager.PERMISSION_GRANTED
+        hasPermission = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         if (hasPermission) {
             audioFiles = getRecentAudioFiles(context.contentResolver)
             files = getDirectoryContents(currentPath)
@@ -258,8 +419,7 @@ fun FileBrowserScreen(
                         if (showFileBrowser) {
                             // Determine the active root (SD card when current path is on SD, otherwise primary)
                             val primaryRoot = Environment.getExternalStorageDirectory().absolutePath
-                            val activeRoot =
-                                sdCardRoot?.takeIf { currentPath.startsWith(it) } ?: primaryRoot
+                            val activeRoot = sdCardRoot?.takeIf { currentPath.startsWith(it) } ?: primaryRoot
 
                             // If we're at the active root, go back to recent songs; otherwise go one directory up
                             if (currentPath == activeRoot) {
@@ -342,298 +502,29 @@ fun FileBrowserScreen(
 
             if (!showFileBrowser) {
                 // Recent audio list: tap the row to play, '+' to add to playlist when applicable
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                    items(audioFiles) { audio ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // thumbnail
-                            val ctx = LocalContext.current
-                            val audioUriString = ContentUris.withAppendedId(
-                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                audio.id
-                            ).toString()
-                            var embeddedBitmap by remember(audioUriString) {
-                                mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(
-                                    null
-                                )
-                            }
-                            LaunchedEffect(audioUriString) {
-                                embeddedBitmap = try {
-                                    com.example.bitsbeats.util.loadEmbeddedArtwork(
-                                        ctx,
-                                        audioUriString
-                                    )
-                                } catch (_: Exception) {
-                                    null
-                                }
-                            }
-
-                            if (embeddedBitmap != null) {
-                                Image(
-                                    bitmap = embeddedBitmap!!,
-                                    contentDescription = "Artwork",
-                                    modifier = Modifier.size(48.dp).clip(CircleShape).clickable { onFileSelected(audio.id) }
-                                )
-                            } else {
-                                Image(
-                                    painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
-                                    contentDescription = "Default artwork",
-                                    modifier = Modifier.size(48.dp).clip(CircleShape).clickable { onFileSelected(audio.id) }
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Column(modifier = Modifier.weight(1f).clickable { onFileSelected(audio.id) }) {
-                                Text(audio.title, color = Color.White)
-                                Text(
-                                    audio.artist.ifEmpty { "Unknown artist" },
-                                    color = Color.LightGray
-                                )
-                            }
-
-                            // If we're in add-to-playlist flow we show '+' that adds directly to the provided playlist name
-                            if (addToPlaylistName != null) {
-                                // replaced plain IconButton+Toast with AnimatedAddButton; success toast removed
-                                AnimatedAddButton(tint = Color.White, onAdd = {
-                                    try {
-                                        val uri = ContentUris.withAppendedId(
-                                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                            audio.id
-                                        ).toString()
-                                        // return whether the item was actually added
-                                        PlaylistStore.addItemToPlaylist(
-                                            context,
-                                            addToPlaylistName,
-                                            uri,
-                                            audio.title,
-                                            audio.artist,
-                                            audio.duration
-                                        )
-                                    } catch (_: Exception) {
-                                        false
-                                    }
-                                })
-                            } else {
-                                // not in "add mode": show three-dot options icon that opens the bottom sheet
-                                IconButton(onClick = {
-                                    // populate selected audio metadata and open options menu
-                                    selectedAudioUri = ContentUris.withAppendedId(
-                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                        audio.id
-                                    ).toString()
-                                    selectedAudioTitle = audio.title
-                                    selectedAudioArtist = audio.artist
-                                    selectedAudioDuration = audio.duration
-                                    playlists = PlaylistStore.loadAll(context).keys.toList()
-                                    showOptionsMenu = true
-                                    Log.d("FileBrowserScreen", "Options menu requested (recent list) for ${audio.title}")
-                                 }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.MoreVert,
-                                        contentDescription = "Options",
-                                        tint = Color.White
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(200.dp))
-                    }
-                }
+                FileList(audioFiles = audioFiles, addToPlaylistName = addToPlaylistName, onFileSelected = onFileSelected, onShowOptions = { uri, title, artist, duration ->
+                    // populate selected audio metadata and open options menu (reuse state in this outer scope)
+                    selectedAudioUri = uri
+                    selectedAudioTitle = title
+                    selectedAudioArtist = artist
+                    selectedAudioDuration = duration
+                    playlists = PlaylistStore.loadAll(context).keys.toList()
+                    showOptionsMenu = true
+                    Log.d("FileBrowserScreen", "Options menu requested (recent list) for $title")
+                })
             } else {
                 // File browser: tap directories to enter, tap audio rows to play, '+' to add to playlist
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                    items(files) { fileItem ->
-                        val resolvedId = if (fileItem.isAudio) pathToId[fileItem.path] else null
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                         verticalAlignment = Alignment.CenterVertically
-                     ) {
-                            // Left icon: folder for directories, thumbnail for audio, default if none
-                            if (fileItem.isDirectory) {
-                                Icon(
-                                    imageVector = Icons.Filled.Folder,
-                                    contentDescription = "Folder",
-                                    tint = Color.White
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            } else if (fileItem.isAudio) {
-                                val ctx = LocalContext.current
-                                val uriString = if (resolvedId != null) ContentUris.withAppendedId(
-                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                    resolvedId
-                                ).toString() else Uri.fromFile(File(fileItem.path)).toString()
-                                var embeddedBitmap by remember(uriString) {
-                                    mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(
-                                        null
-                                    )
-                                }
-                                LaunchedEffect(uriString) {
-                                    embeddedBitmap = try {
-                                        com.example.bitsbeats.util.loadEmbeddedArtwork(
-                                            ctx,
-                                            uriString
-                                        )
-                                    } catch (_: Exception) {
-                                        null
-                                    }
-                                }
-                                if (embeddedBitmap != null) {
-                                    Image(
-                                        bitmap = embeddedBitmap!!,
-                                        contentDescription = "Artwork",
-                                        modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) }
-                                    )
-                                } else {
-                                    Image(
-                                        painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
-                                        contentDescription = "Default artwork",
-                                        modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) }
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                            } else {
-                                // fallback for other file types
-                                Icon(
-                                    imageVector = Icons.Filled.Folder,
-                                    contentDescription = "File",
-                                    tint = Color.LightGray
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-
-                            Column(modifier = Modifier.weight(1f).clickable {
-                            if (fileItem.isDirectory) currentPath = fileItem.path else if (fileItem.isAudio) {
-                                if (resolvedId != null) onFileSelected(resolvedId) else Toast.makeText(context, "Not indexed in MediaStore", Toast.LENGTH_SHORT).show()
-                            }
-                        }) {
-                                Text(fileItem.name, color = Color.White)
-                            }
-
-                            // If we're in add-to-playlist flow we show '+' that adds directly to the provided playlist name
-                            if (fileItem.isAudio && addToPlaylistName != null) {
-                                AnimatedAddButton(tint = Color.White, onAdd = {
-                                    if (resolvedId == null) return@AnimatedAddButton false
-                                    try {
-                                        val uri = ContentUris.withAppendedId(
-                                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                            resolvedId
-                                        ).toString()
-                                        var title = File(fileItem.path).name
-                                        var artist = ""
-                                        var duration = 0L
-                                        try {
-                                            context.contentResolver.query(
-                                                ContentUris.withAppendedId(
-                                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                    resolvedId
-                                                ),
-                                                arrayOf(
-                                                    MediaStore.Audio.Media.TITLE,
-                                                    MediaStore.Audio.Media.ARTIST,
-                                                    MediaStore.Audio.Media.DURATION
-                                                ),
-                                                null,
-                                                null,
-                                                null
-                                            )?.use { c ->
-                                                if (c.moveToFirst()) {
-                                                    title = c.getString(0) ?: title
-                                                    artist = c.getString(1) ?: ""
-                                                    duration = c.getLong(2)
-                                                }
-                                            }
-                                        } catch (_: Exception) { /* ignore metadata errors */ }
-
-                                        // return whether it was actually added (false if duplicate)
-                                        return@AnimatedAddButton PlaylistStore.addItemToPlaylist(
-                                            context,
-                                            addToPlaylistName,
-                                            uri,
-                                            title,
-                                            artist,
-                                            duration
-                                        )
-                                    } catch (_: Exception) {
-                                        return@AnimatedAddButton false
-                                    }
-                                })
-                             } else if (fileItem.isAudio) {
-                                // not in add mode: show three-dot options icon like in recent list
-                                val ctx = LocalContext.current
-                                val uriString = if (resolvedId != null) ContentUris.withAppendedId(
-                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                    resolvedId
-                                ).toString() else Uri.fromFile(File(fileItem.path)).toString()
-                                IconButton(onClick = {
-                                    selectedAudioUri = uriString
-                                    // try to fill title/artist/duration when available
-                                    var title = File(fileItem.path).name
-                                    var artist = ""
-                                    var duration = 0L
-                                    try {
-                                        if (resolvedId != null) {
-                                            context.contentResolver.query(
-                                                ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId),
-                                                arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION),
-                                                null, null, null
-                                            )?.use { c ->
-                                                if (c.moveToFirst()) {
-                                                    title = c.getString(0) ?: title
-                                                    artist = c.getString(1) ?: ""
-                                                    duration = c.getLong(2)
-                                                }
-                                            }
-                                        }
-                                    } catch (_: Exception) {}
-                                    selectedAudioTitle = title
-                                    selectedAudioArtist = artist
-                                    selectedAudioDuration = duration
-                                    playlists = PlaylistStore.loadAll(context).keys.toList()
-                                    showOptionsMenu = true
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.MoreVert,
-                                        contentDescription = "Options",
-                                        tint = Color.White
-                                    )
-                                }
-                            }
-
-                         }
-                     }
-                    item {
-                        Spacer(modifier = Modifier.height(200.dp))
-                    }
-                 }
-             }
-         }
-     }
+                FileList(files = files, pathToId = pathToId, addToPlaylistName = addToPlaylistName, onFileSelected = onFileSelected, onEnterDirectory = { path -> currentPath = path }, onShowOptions = { uri, title, artist, duration ->
+                    selectedAudioUri = uri
+                    selectedAudioTitle = title
+                    selectedAudioArtist = artist
+                    selectedAudioDuration = duration
+                    playlists = PlaylistStore.loadAll(context).keys.toList()
+                    showOptionsMenu = true
+                })
+            }
+        }
+    }
 
     // --- "Add all" dialog: confirm adding all files in the current directory to a playlist ---
     if (showAddAllDialog) {
@@ -683,8 +574,8 @@ fun FileBrowserScreen(
                     ) {
                         Text("New playlist")
                     }
-                 }
-             },
+                }
+            },
             confirmButton = {},
             dismissButton = {
                 Button(onClick = onDismiss) {
@@ -738,8 +629,8 @@ fun FileBrowserScreen(
                         placeholder = { Text("Playlist name") },
                         modifier = Modifier.fillMaxWidth()
                     )
-                 }
-             },
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
