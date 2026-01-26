@@ -53,7 +53,6 @@ import com.example.bitsbeats.ui.screens.FileBrowserScreen
 import com.example.bitsbeats.ui.screens.HomeScreen
 import com.example.bitsbeats.ui.screens.PlayerScreen
 import com.example.bitsbeats.ui.screens.PlaylistDetailScreen
-import com.example.bitsbeats.ui.screens.PlaylistScreen
 
 // PlaybackController moved to `PlaybackController.kt` (same package) to keep MainActivity concise
 class MainActivity : ComponentActivity() {
@@ -75,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     // Ensure MediaPlaybackService is started early so it can register its listener
                     try {
-                        val svcIntent = android.content.Intent(appContext, com.example.bitsbeats.MediaPlaybackService::class.java)
+                        val svcIntent = android.content.Intent(appContext, MediaPlaybackService::class.java)
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                             try { appContext.startForegroundService(svcIntent) } catch (_: Exception) { appContext.startService(svcIntent) }
                         } else {
@@ -91,7 +90,7 @@ class MainActivity : ComponentActivity() {
 
                     // Ensure MediaPlaybackService is started if we have a restored playback or current track
                     try {
-                        val svcIntent = android.content.Intent(appContext, com.example.bitsbeats.MediaPlaybackService::class.java)
+                        val svcIntent = android.content.Intent(appContext, MediaPlaybackService::class.java)
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                             try { appContext.startForegroundService(svcIntent) } catch (_: Exception) { appContext.startService(svcIntent) }
                         } else {
@@ -136,7 +135,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Route to open player without changing playback (used by mini-player)
                         composable("player") {
                             PlayerScreen(audioId = -1L, restoreIfNoCurrent = false)
                         }
@@ -149,23 +147,25 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("playlist") {
-                            PlaylistScreen(
-                                onNavigateToPlaylistDetail = { name ->
+                            com.example.bitsbeats.ui.screens.PlaylistScreen(
+                                onNavigateToPlaylistDetail = { name: String ->
                                     val enc = URLEncoder.encode(name, "UTF-8")
                                     navController.navigate("playlistDetail/$enc")
                                 },
-                                onCreatePlaylist = {}
+                                onCreatePlaylist = {},
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 
                         // Route without parameter: opens playlists list (used when no active playlist is set)
                         composable("playlistDetail") {
-                            PlaylistScreen(
-                                onNavigateToPlaylistDetail = { name ->
+                            com.example.bitsbeats.ui.screens.PlaylistScreen(
+                                onNavigateToPlaylistDetail = { name: String ->
                                     val enc = URLEncoder.encode(name, "UTF-8")
                                     navController.navigate("playlistDetail/$enc")
                                 },
-                                onCreatePlaylist = {}
+                                onCreatePlaylist = {},
+                                onNavigateBack = { navController.popBackStack() }
                             )
                         }
 
