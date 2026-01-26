@@ -67,6 +67,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.core.content.ContextCompat
+import com.example.bitsbeats.R
 import com.example.bitsbeats.data.AudioFile
 import com.example.bitsbeats.data.FileItem
 import com.example.bitsbeats.data.FileRepository.getDirectoryContents
@@ -582,7 +583,48 @@ fun FileBrowserScreen(
                                         return@AnimatedAddButton false
                                     }
                                 })
-                             }
+                             } else if (fileItem.isAudio) {
+                                // not in add mode: show three-dot options icon like in recent list
+                                val ctx = LocalContext.current
+                                val uriString = if (resolvedId != null) ContentUris.withAppendedId(
+                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                    resolvedId
+                                ).toString() else Uri.fromFile(File(fileItem.path)).toString()
+                                IconButton(onClick = {
+                                    selectedAudioUri = uriString
+                                    // try to fill title/artist/duration when available
+                                    var title = File(fileItem.path).name
+                                    var artist = ""
+                                    var duration = 0L
+                                    try {
+                                        if (resolvedId != null) {
+                                            context.contentResolver.query(
+                                                ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId),
+                                                arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION),
+                                                null, null, null
+                                            )?.use { c ->
+                                                if (c.moveToFirst()) {
+                                                    title = c.getString(0) ?: title
+                                                    artist = c.getString(1) ?: ""
+                                                    duration = c.getLong(2)
+                                                }
+                                            }
+                                        }
+                                    } catch (_: Exception) {}
+                                    selectedAudioTitle = title
+                                    selectedAudioArtist = artist
+                                    selectedAudioDuration = duration
+                                    playlists = PlaylistStore.loadAll(context).keys.toList()
+                                    showOptionsMenu = true
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.MoreVert,
+                                        contentDescription = "Options",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+
                          }
                      }
                     item {
@@ -721,60 +763,54 @@ fun FileBrowserScreen(
     }
 
     // --- Options menu (bottom sheet) for audio file actions ---
+    // When invoked from recent or browser lists (and not in add mode), we only show "Add to playlist"
     if (showOptionsMenu) {
         GenericOptionsSheet(
             visible = true,
             onDismiss = { showOptionsMenu = false },
             options = buildList {
-                // "Play now" action: play the selected audio file immediately
-                add(
-                    GenericOptionItem(
-                        icon = Icons.AutoMirrored.Filled.PlaylistAdd,
-                        label = "Play now",
-                        onClick = {
-                            showOptionsMenu = false
-                            onFileSelected(queryAudioIdFromPath(context.contentResolver, selectedAudioUri!!) ?: -1)
-                        }
-                    )
-                )
-                // "Add to playlist" action: show dialog to select a playlist
                 add(
                     GenericOptionItem(
                         icon = Icons.Filled.Add,
                         label = "Add to playlist",
                         onClick = {
-                            showOptionsMenu = false
-                            // load playlists and show dialog
+                            // open playlist selection sheet
                             playlists = PlaylistStore.loadAll(context).keys.toList()
+                            showOptionsMenu = false
                             showAddToPlaylistDialog = true
-                        }
-                    )
-                )
-                // "Share" action: share the selected audio file
-                add(
-                    GenericOptionItem(
-                        icon = Icons.Filled.Share,
-                        label = "Share",
-                        onClick = {
-                            showOptionsMenu = false
-                            // TODO: implement share functionality
-                            Toast.makeText(context, "Share not implemented", Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                )
-                // "Delete" action: delete the selected audio file (with confirmation)
-                add(
-                    GenericOptionItem(
-                        icon = Icons.Filled.Delete,
-                        label = "Delete",
-                        onClick = {
-                            showOptionsMenu = false
-                            // TODO: implement delete functionality
-                            Toast.makeText(context, "Delete not implemented", Toast.LENGTH_SHORT).show()
                         }
                     )
                 )
             }
         )
     }
-}
+
+    // --- Playlist selection sheet for adding a single audio item ---
+    if (showAddToPlaylistDialog) {
+        val onDismiss = { showAddToPlaylistDialog = false }
+        GenericOptionsSheet(
+            visible = showAddToPlaylistDialog,
+            onDismiss = onDismiss,
+            headerContent = { Text("Add to playlist", color = Color.White) },
+            options = playlists.map { plName ->
+                GenericOptionItem(
+                    label = plName,
+                    leadingImageUri = PlaylistStore.getPlaylistImage(context, plName),
+                    defaultLeadingPainterResourceId = R.drawable.playlist_default,
+                    onClick = {
+                        // add the selected audio to this playlist
+                        try {
+                            val uri = selectedAudioUri
+                            if (!uri.isNullOrBlank()) {
+                                PlaylistStore.addItemToPlaylist(context, plName, uri, selectedAudioTitle, selectedAudioArtist, selectedAudioDuration)
+                                Toast.makeText(context, "Added to '$plName'", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Could not add to playlist", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
+        )
+    }
+ }

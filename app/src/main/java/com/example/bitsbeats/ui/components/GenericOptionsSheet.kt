@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,14 +43,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.net.toUri
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Animatable
 
@@ -76,12 +79,15 @@ fun GenericOptionsSheet(
 ) {
     if (!visible) return
 
-    val config = LocalConfiguration.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
 
-    val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
+    // Prefer using the window container size to compute pixel heights (handles multi-window and insets better)
+    val windowInfo = LocalWindowInfo.current
+    // Use the container size directly — this follows lint guidance
+    val container = windowInfo.containerSize
+    val screenHeightPx = container.height.toFloat()
     val topMarginPx = with(density) { 48.dp.toPx() }
     val minHeightPx = screenHeightPx / 2f
     val maxHeightPx = (screenHeightPx - topMarginPx).coerceAtLeast(minHeightPx)
@@ -105,62 +111,73 @@ fun GenericOptionsSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(sheetHeightDp.value)
-                            .draggable(
-                                orientation = Orientation.Vertical,
-                                state = rememberDraggableState { delta ->
-                                    scope.launch { val new = (sheetHeightPx.value - delta).coerceIn(0f, maxHeightPx); sheetHeightPx.snapTo(new) }
-                                },
-                                onDragStopped = { velocity ->
-                                    scope.launch {
-                                        val current = sheetHeightPx.value
-                                        if (velocity > 2000f || current < minHeightPx * 0.6f) onDismiss() else if (current > (minHeightPx + maxHeightPx) / 2f) sheetHeightPx.animateTo(maxHeightPx, tween(250)) else sheetHeightPx.animateTo(minHeightPx, tween(250))
-                                    }
-                                }
-                            )
                             .background(color = Color(0xFF0F0F0F), shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                             .padding(16.dp)
                     ) {
-                        // handle
-                        Box(modifier = Modifier.align(Alignment.CenterHorizontally).height(6.dp).width(40.dp).clip(RoundedCornerShape(3.dp)).background(Color.LightGray.copy(alpha = 0.15f)))
+                        // handle: draggable only on this handle
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .height(6.dp)
+                                .width(40.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color.LightGray.copy(alpha = 0.15f))
+                                .draggable(
+                                    orientation = Orientation.Vertical,
+                                    state = rememberDraggableState { delta ->
+                                        scope.launch { val new = (sheetHeightPx.value - delta).coerceIn(0f, maxHeightPx); sheetHeightPx.snapTo(new) }
+                                    },
+                                    onDragStopped = { velocity ->
+                                        scope.launch {
+                                            val current = sheetHeightPx.value
+                                            if (velocity > 2000f || current < minHeightPx * 0.6f) onDismiss() else if (current > (minHeightPx + maxHeightPx) / 2f) sheetHeightPx.animateTo(maxHeightPx, tween(250)) else sheetHeightPx.animateTo(minHeightPx, tween(250))
+                                        }
+                                    }
+                                )
+                        )
+
                         Spacer(modifier = Modifier.height(10.dp))
 
                         headerContent?.let { it(); Spacer(modifier = Modifier.height(12.dp)) }
 
-                        options.forEach { opt ->
-                            // leading image loader if provided
-                            var leadBitmap by remember(opt.leadingImageUri) { mutableStateOf<ImageBitmap?>(null) }
-                            LaunchedEffect(opt.leadingImageUri) {
-                                leadBitmap = try {
-                                    opt.leadingImageUri?.let { uriStr ->
-                                        val uri = android.net.Uri.parse(uriStr)
-                                        ctx.contentResolver.openInputStream(uri)?.use { stream ->
-                                            val bmp = BitmapFactory.decodeStream(stream)
-                                            bmp?.asImageBitmap()
+                        // Scrollable content: use LazyColumn so content scrolls independently of the handle
+                        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            items(options) { opt ->
+                                // leading image loader if provided
+                                var leadBitmap by remember(opt.leadingImageUri) { mutableStateOf<ImageBitmap?>(null) }
+                                LaunchedEffect(opt.leadingImageUri) {
+                                    leadBitmap = try {
+                                        opt.leadingImageUri?.let { uriStr ->
+                                            val uri = uriStr.toUri()
+                                            ctx.contentResolver.openInputStream(uri)?.use { stream ->
+                                                val bmp = BitmapFactory.decodeStream(stream)
+                                                bmp?.asImageBitmap()
+                                            }
                                         }
-                                    }
-                                } catch (_: Exception) { null }
-                            }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(if (opt.rowClickable) Modifier.clickable { try { opt.onClick() } catch (_: Exception) {}; onDismiss() } else Modifier)
-                                    .padding(vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (leadBitmap != null) {
-                                    Image(bitmap = leadBitmap!!, contentDescription = opt.label, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
-                                } else if (opt.defaultLeadingPainterResourceId != null) {
-                                    Image(painter = painterResource(id = opt.defaultLeadingPainterResourceId), contentDescription = opt.label, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
-                                } else if (opt.icon != null) {
-                                    Icon(imageVector = opt.icon, contentDescription = opt.label, tint = opt.iconTint)
+                                    } catch (_: Exception) { null }
                                 }
 
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(text = opt.label, color = Color.White, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(if (opt.rowClickable) Modifier.clickable { try { opt.onClick() } catch (_: Exception) {}; onDismiss() } else Modifier)
+                                        .padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (leadBitmap != null) {
+                                        Image(bitmap = leadBitmap!!, contentDescription = opt.label, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
+                                    } else if (opt.defaultLeadingPainterResourceId != null) {
+                                        Image(painter = painterResource(id = opt.defaultLeadingPainterResourceId), contentDescription = opt.label, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
+                                    } else if (opt.icon != null) {
+                                        Icon(imageVector = opt.icon, contentDescription = opt.label, tint = opt.iconTint)
+                                    }
 
-                                // trailing content (e.g., plus button)
-                                opt.trailingContent?.let { tc -> tc() }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(text = opt.label, color = Color.White, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+
+                                    // trailing content (e.g., plus button)
+                                    opt.trailingContent?.let { tc -> tc() }
+                                }
                             }
                         }
 
