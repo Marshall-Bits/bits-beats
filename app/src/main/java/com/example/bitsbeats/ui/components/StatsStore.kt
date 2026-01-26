@@ -203,4 +203,25 @@ object StatsStore {
             artists.optLong(artist, 0L)
         } catch (_: Exception) { 0L }
     }
+
+    // Remove stats associated with a playlist (called when playlist is deleted)
+    fun deletePlaylistStats(context: Context, playlistName: String?) {
+        if (playlistName.isNullOrBlank()) return
+        try {
+            val root = load(context)
+            val pls = root.optJSONObject("playlists")
+            if (pls != null && pls.has(playlistName)) {
+                pls.remove(playlistName)
+                // update object
+                root.put("playlists", pls)
+            }
+            // clear global last-playlist pointers if they refer to this playlist
+            val last = root.optString("lastPlaylistName", "")
+            if (last == playlistName) {
+                root.remove("lastPlaylistName")
+                root.remove("lastPlaylistTs")
+            }
+            save(context, root)
+        } catch (_: Exception) {}
+    }
 }

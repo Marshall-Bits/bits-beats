@@ -78,6 +78,8 @@ object PlaylistStore {
                 }
             }
         } catch (_: Exception) {}
+        // remove associated stats for this playlist
+        try { com.example.bitsbeats.ui.components.StatsStore.deletePlaylistStats(context, name) } catch (_: Exception) {}
     }
 
     fun renamePlaylist(context: Context, oldName: String, newName: String): Boolean {

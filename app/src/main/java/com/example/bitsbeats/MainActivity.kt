@@ -299,19 +299,7 @@ class MainActivity : ComponentActivity() {
                             // Playlists
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable {
-                                    val active = PlaybackController.activePlaylistName
-                                    if (!active.isNullOrBlank()) {
-                                        try {
-                                            val enc = URLEncoder.encode(active, "UTF-8")
-                                            navController.navigate("playlistDetail/$enc")
-                                        } catch (_: Exception) {
-                                            navController.navigate("playlist")
-                                        }
-                                    } else {
-                                        navController.navigate("playlistDetail")
-                                    }
-                                }) {
+                                modifier = Modifier.clickable { navController.navigate("playlist") }) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                                     contentDescription = "Playlists",
