@@ -94,6 +94,11 @@ fun PlaylistDetailScreen(
     // Coroutine scope for launching deletions
     val scope = rememberCoroutineScope()
 
+    // --- New: state for confirming deletion of a single song ---
+    var showDeleteSongConfirm by remember { mutableStateOf(false) }
+    var pendingDeleteUri by remember { mutableStateOf<String?>(null) }
+    var pendingDeleteTitle by remember { mutableStateOf<String?>(null) }
+
     // artwork URI state (so we can update after picking an image)
     var currentArtworkUri by remember {
         mutableStateOf(
@@ -301,6 +306,44 @@ fun PlaylistDetailScreen(
             )
         }
 
+        // Confirmation dialog for deleting a single song from the playlist
+        if (showDeleteSongConfirm) {
+            val uri = pendingDeleteUri
+            val title = pendingDeleteTitle ?: "this song"
+            AlertDialog(
+                onDismissRequest = { showDeleteSongConfirm = false; pendingDeleteUri = null; pendingDeleteTitle = null },
+                title = { Text("Delete song") },
+                text = { Text("Delete '$title' from '$playlistName'?") },
+                confirmButton = {
+                    Button(onClick = {
+                        // perform the deletion with the same mutex / coroutine safety
+                        scope.launch {
+                            if (uri != null) {
+                                deleteMutex.lock()
+                                try {
+                                    deletingUris = deletingUris + uri
+                                    PlaylistStore.removeItemFromPlaylist(context, playlistName, uri)
+                                    items = PlaylistStore.getPlaylist(context, playlistName)
+                                    Toast.makeText(context, "Deleted from $playlistName", Toast.LENGTH_SHORT).show()
+                                    deletingUris = deletingUris - uri
+                                } catch (_: Exception) {
+                                    Toast.makeText(context, "Could not delete song", Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    deleteMutex.unlock()
+                                }
+                            }
+                        }
+                        showDeleteSongConfirm = false
+                        pendingDeleteUri = null
+                        pendingDeleteTitle = null
+                    }) { Text("Delete") }
+                },
+                dismissButton = {
+                    Button(onClick = { showDeleteSongConfirm = false; pendingDeleteUri = null; pendingDeleteTitle = null }) { Text("Cancel") }
+                }
+            )
+        }
+
         if (items.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -365,23 +408,13 @@ fun PlaylistDetailScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), CircleShape), contentAlignment = Alignment.Center) {
                             val uri = item["uri"] as? String ?: ""
+                            val title = item["title"] as? String ?: "this song"
                             IconButton(
                                 onClick = {
-                                    // Delete action: use mutex to ensure thread safety
-                                    scope.launch {
-                                        deleteMutex.lock()
-                                        try {
-                                            // mark URI as deleting
-                                            deletingUris = deletingUris + uri
-                                            PlaylistStore.removeItemFromPlaylist(context, playlistName, uri)
-                                            items = PlaylistStore.getPlaylist(context, playlistName)
-                                            Toast.makeText(context, "Deleted from $playlistName", Toast.LENGTH_SHORT).show()
-                                            // unmark URI
-                                            deletingUris = deletingUris - uri
-                                        } finally {
-                                            deleteMutex.unlock()
-                                        }
-                                    }
+                                    // Open confirmation dialog instead of deleting immediately
+                                    pendingDeleteUri = uri
+                                    pendingDeleteTitle = title
+                                    showDeleteSongConfirm = true
                                 },
                                 enabled = uri !in deletingUris
                             ) {
