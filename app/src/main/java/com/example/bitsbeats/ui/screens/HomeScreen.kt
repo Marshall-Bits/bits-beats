@@ -30,6 +30,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import com.example.bitsbeats.R
 import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.ui.components.StatsStore
@@ -122,6 +125,24 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.weight(1f))
                 }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            // Stats button (rounded, with icon) — looks clickable
+            Box(modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF1F1F1F))
+                .clickable { onNavigateToStats() }
+                .padding(vertical = 10.dp, horizontal = 12.dp),
+                contentAlignment = Alignment.CenterStart) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.BarChart, contentDescription = "Stats", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Stats", color = Color.White, fontSize = 16.sp)
+                }
+            }
+
         }
     }
 }

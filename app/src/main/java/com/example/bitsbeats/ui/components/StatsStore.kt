@@ -140,4 +140,67 @@ object StatsStore {
             list.sortedByDescending { it.second }.take(limit)
         } catch (_: Exception) { emptyList() }
     }
+
+    // --- New: accumulate played milliseconds for songs, playlists and artists ---
+    fun addSongPlayedMs(context: Context, uri: String?, ms: Long) {
+        if (uri.isNullOrBlank() || ms <= 0L) return
+        try {
+            val root = load(context)
+            val songs = root.optJSONObject("songs") ?: JSONObject().also { root.put("songs", it) }
+            val entry = songs.optJSONObject(uri) ?: JSONObject()
+            val prev = entry.optLong("playedMs", 0L)
+            entry.put("playedMs", prev + ms)
+            // preserve existing metadata if present
+            songs.put(uri, entry)
+
+            // update artist aggregated played ms if artist known on the song entry
+            val artistName = entry.optString("artist", "").takeIf { !it.isNullOrBlank() }
+            if (!artistName.isNullOrBlank()) {
+                val artistsPlayed = root.optJSONObject("artistsPlayed") ?: JSONObject().also { root.put("artistsPlayed", it) }
+                val aPrev = artistsPlayed.optLong(artistName, 0L)
+                artistsPlayed.put(artistName, aPrev + ms)
+            }
+
+            save(context, root)
+        } catch (_: Exception) {}
+    }
+
+    fun addPlaylistPlayedMs(context: Context, playlistName: String?, ms: Long) {
+        if (playlistName.isNullOrBlank() || ms <= 0L) return
+        try {
+            val root = load(context)
+            val pls = root.optJSONObject("playlists") ?: JSONObject().also { root.put("playlists", it) }
+            val entry = pls.optJSONObject(playlistName) ?: JSONObject()
+            val prev = entry.optLong("playedMs", 0L)
+            entry.put("playedMs", prev + ms)
+            pls.put(playlistName, entry)
+
+            save(context, root)
+        } catch (_: Exception) {}
+    }
+
+    fun getSongPlayedMs(context: Context, uri: String): Long {
+        return try {
+            val root = load(context)
+            val songs = root.optJSONObject("songs") ?: return 0L
+            songs.optJSONObject(uri)?.optLong("playedMs", 0L) ?: 0L
+        } catch (_: Exception) { 0L }
+    }
+
+    fun getPlaylistPlayedMs(context: Context, playlistName: String): Long {
+        return try {
+            val root = load(context)
+            val pls = root.optJSONObject("playlists") ?: return 0L
+            pls.optJSONObject(playlistName)?.optLong("playedMs", 0L) ?: 0L
+        } catch (_: Exception) { 0L }
+    }
+
+    fun getArtistPlayedMs(context: Context, artist: String): Long {
+        if (artist.isBlank()) return 0L
+        return try {
+            val root = load(context)
+            val artists = root.optJSONObject("artistsPlayed") ?: return 0L
+            artists.optLong(artist, 0L)
+        } catch (_: Exception) { 0L }
+    }
 }

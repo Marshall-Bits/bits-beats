@@ -123,12 +123,41 @@ object PlaybackController {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var appContext: Context? = null
 
+    // --- Session tracking for played time accumulation ---
+    private var playSessionStartPosition: Long? = null
+    private var playSessionStartUri: String? = null
+
     private const val PREFS = "bitsbeats_prefs"
     private const val KEY_LAST_STATE = "last_playback_state"
+
+    // Finalize and persist any in-progress play session (called on pause/stop/seek/track change)
+    private fun finalizeCurrentPlaySession(context: Context?) {
+        try {
+            val ctx = context ?: appContext ?: return
+            val startPos = playSessionStartPosition ?: return
+            val startUri = playSessionStartUri ?: currentUri ?: return
+            // prefer actual mediaPlayer position when available
+            val nowPos = try { mediaPlayer?.currentPosition?.toLong() ?: currentPosition } catch (_: Exception) { currentPosition }
+            var delta = nowPos - startPos
+            if (delta < 0L) delta = 0L
+            // clamp to duration if available
+            if (duration > 0L && delta > duration) delta = duration
+            if (delta > 0L) {
+                try { StatsStore.addSongPlayedMs(ctx, startUri, delta) } catch (_: Exception) {}
+                try { activePlaylistName?.let { StatsStore.addPlaylistPlayedMs(ctx, it, delta) } } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {
+        } finally {
+            playSessionStartPosition = null
+            playSessionStartUri = null
+        }
+    }
 
     /** Play a list of URIs as a queue starting at [startIndex]. This replaces any existing queue. */
     fun playQueue(context: Context, uris: List<String>, startIndex: Int = 0, playlistName: String? = null) {
         if (uris.isEmpty()) return
+        // finalize any current session before replacing the queue
+        try { if (isPlaying || playSessionStartPosition != null) finalizeCurrentPlaySession(context) } catch (_: Exception) {}
         // If shuffle is enabled, build a shuffled queue keeping the selected item first
         if (shuffleEnabled) {
             val selected = uris.getOrNull(startIndex.coerceIn(0, uris.size - 1))
@@ -178,6 +207,8 @@ object PlaybackController {
 
     private fun playUri(context: Context, uri: Uri) {
         try {
+            // finalize any previous play session (for a different URI)
+            try { finalizeCurrentPlaySession(context) } catch (_: Exception) {}
             appContext = context.applicationContext
             // query metadata
             try {
@@ -210,6 +241,13 @@ object PlaybackController {
                 isPlaying = true
                 mp.start()
 
+                // start play session tracking
+                try {
+                    currentPosition = mp.currentPosition.toLong()
+                    playSessionStartPosition = currentPosition
+                    playSessionStartUri = currentUri
+                } catch (_: Exception) {}
+
                 // Start MediaPlaybackService immediately to reduce race where notification/session aren't ready
                 try {
                     val svcIntent = android.content.Intent(context.applicationContext, com.example.bitsbeats.MediaPlaybackService::class.java)
@@ -222,6 +260,8 @@ object PlaybackController {
 
                 // on completion advance to next in queue
                 mp.setOnCompletionListener {
+                    // finalize the just-completed play
+                    try { finalizeCurrentPlaySession(appContext) } catch (_: Exception) {}
                     // handle completion depending on repeat mode
                     when (repeatMode) {
                         RepeatMode.REPEAT_ONE -> {
@@ -229,6 +269,9 @@ object PlaybackController {
                                 mp.seekTo(0)
                                 mp.start()
                                 isPlaying = true
+                                // start a new session from position 0 for the same URI
+                                playSessionStartPosition = 0L
+                                playSessionStartUri = currentUri
                                 startTicker()
                             } catch (_: Exception) {}
                         }
@@ -257,12 +300,17 @@ object PlaybackController {
     fun togglePlayPause() {
         val mp = mediaPlayer ?: return
         if (mp.isPlaying) {
-            mp.pause()
+            // finalize played ms up to current position, then pause
+            try { currentPosition = mp.currentPosition.toLong() } catch (_: Exception) {}
+            try { finalizeCurrentPlaySession(appContext) } catch (_: Exception) {}
+            try { mp.pause() } catch (_: Exception) {}
             isPlaying = false
             stopTicker()
         } else {
             mp.start()
             isPlaying = true
+            // start session at current position
+            try { playSessionStartPosition = mp.currentPosition.toLong(); playSessionStartUri = currentUri } catch (_: Exception) {}
             startTicker()
         }
         // persist play state
@@ -271,7 +319,21 @@ object PlaybackController {
     }
 
     fun seekTo(ms: Int) {
-        try { mediaPlayer?.seekTo(ms); currentPosition = ms.toLong() } catch (_: Exception) {}
+        try {
+            val wasPlaying = mediaPlayer?.isPlaying == true
+            if (wasPlaying) {
+                // finalize current session up to current position before seeking
+                try { currentPosition = mediaPlayer?.currentPosition?.toLong() ?: currentPosition } catch (_: Exception) {}
+                try { finalizeCurrentPlaySession(appContext) } catch (_: Exception) {}
+            }
+            mediaPlayer?.seekTo(ms)
+            currentPosition = ms.toLong()
+            if (wasPlaying) {
+                // start a new session from the new position
+                playSessionStartPosition = currentPosition
+                playSessionStartUri = currentUri
+            }
+        } catch (_: Exception) {}
         appContext?.let { saveState(it) }
         notifyStateChanged()
     }
@@ -297,6 +359,9 @@ object PlaybackController {
     fun nextTrack() {
         // If there's no queue, do nothing
         if (queue.isEmpty()) return
+
+        // finalize current session before advancing
+        try { finalizeCurrentPlaySession(appContext) } catch (_: Exception) {}
 
         // If there is a next item, advance.
         if (queueIndex + 1 < queue.size) {
@@ -334,6 +399,8 @@ object PlaybackController {
             notifyStateChanged()
         } else {
             if (queueIndex > 0) {
+                // finalize current session before moving
+                try { finalizeCurrentPlaySession(appContext) } catch (_: Exception) {}
                 queueIndex -= 1
                 appContext?.let { saveState(it) }
                 playCurrentFromQueue()
@@ -346,6 +413,8 @@ object PlaybackController {
     }
 
     private fun stopPlayback() {
+        // finalize any current play session before stopping
+        try { finalizeCurrentPlaySession(appContext) } catch (_: Exception) {}
         stopTicker()
         try { mediaPlayer?.release() } catch (_: Exception) {}
         mediaPlayer = null
@@ -441,6 +510,8 @@ object PlaybackController {
     }
 
     fun release() {
+        // finalize session before releasing
+        try { finalizeCurrentPlaySession(appContext) } catch (_: Exception) {}
         stopTicker()
         try { mediaPlayer?.release() } catch (_: Exception) {}
         mediaPlayer = null
@@ -451,6 +522,8 @@ object PlaybackController {
     /** Public helper to clear playback state (stop, clear queue, clear active playlist) */
     fun clearPlaybackAndReset() {
         try {
+            // finalize any current play session
+            try { finalizeCurrentPlaySession(appContext) } catch (_: Exception) {}
             stopTicker()
             try { mediaPlayer?.release() } catch (_: Exception) {}
             mediaPlayer = null
