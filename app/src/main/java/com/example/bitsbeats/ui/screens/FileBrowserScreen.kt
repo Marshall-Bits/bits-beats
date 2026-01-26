@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -92,7 +94,6 @@ private fun AnimatedAddButton(
     val scope = rememberCoroutineScope()
     val animScaleX = remember { Animatable(1f) }
     val animScaleY = remember { Animatable(1f) }
-    val animRotation = remember { Animatable(0f) }
     val animOffsetX = remember { Animatable(0f) } // for shake on failure
 
     IconButton(onClick = {
@@ -109,12 +110,14 @@ private fun AnimatedAddButton(
                 // peak: scale to 2x and rotate to +40deg in parallel
                 val j1 = launch { animScaleX.animateTo(2f, animationSpec = tween(durationMillis = peakMs, easing = FastOutSlowInEasing)) }
                 val j2 = launch { animScaleY.animateTo(2f, animationSpec = tween(durationMillis = peakMs, easing = FastOutSlowInEasing)) }
-                j1.join(); j2.join();
+                j1.join()
+                j2.join()
 
                 // return to identity quickly with same non-linear easing
                 val k1 = launch { animScaleX.animateTo(1f, animationSpec = tween(durationMillis = backMs, easing = FastOutSlowInEasing)) }
                 val k2 = launch { animScaleY.animateTo(1f, animationSpec = tween(durationMillis = backMs, easing = FastOutSlowInEasing)) }
-                k1.join(); k2.join();
+                k1.join()
+                k2.join()
 
                 // ensure offset reset
                 animOffsetX.animateTo(0f, animationSpec = tween(30))
@@ -409,6 +412,7 @@ fun FileBrowserScreen(
                                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                                             audio.id
                                         ).toString()
+                                        // return whether the item was actually added
                                         PlaylistStore.addItemToPlaylist(
                                             context,
                                             addToPlaylistName,
@@ -417,7 +421,6 @@ fun FileBrowserScreen(
                                             audio.artist,
                                             audio.duration
                                         )
-                                        true
                                     } catch (_: Exception) {
                                         false
                                     }
@@ -534,68 +537,15 @@ fun FileBrowserScreen(
                             // If we're in add-to-playlist flow we show '+' that adds directly to the provided playlist name
                             if (fileItem.isAudio && addToPlaylistName != null) {
                                 AnimatedAddButton(tint = Color.White, onAdd = {
-                                    if (resolvedId != null) {
-                                        try {
-                                            val uri = ContentUris.withAppendedId(
-                                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                resolvedId
-                                            ).toString()
-                                            var title = File(fileItem.path).name
-                                            var artist = ""
-                                            var duration = 0L
-                                            try {
-                                                context.contentResolver.query(
-                                                    ContentUris.withAppendedId(
-                                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                        resolvedId
-                                                    ),
-                                                    arrayOf(
-                                                        MediaStore.Audio.Media.TITLE,
-                                                        MediaStore.Audio.Media.ARTIST,
-                                                        MediaStore.Audio.Media.DURATION
-                                                    ),
-                                                    null,
-                                                    null,
-                                                    null
-                                                )?.use { c ->
-                                                    if (c.moveToFirst()) {
-                                                        title = c.getString(0) ?: title
-                                                        artist = c.getString(1) ?: ""
-                                                        duration = c.getLong(2)
-                                                    }
-                                                }
-                                            } catch (_: Exception) {
-                                            }
-                                            PlaylistStore.addItemToPlaylist(
-                                                context,
-                                                addToPlaylistName,
-                                                uri,
-                                                title,
-                                                artist,
-                                                duration
-                                            )
-                                            true
-                                        } catch (_: Exception) {
-                                            false
-                                        }
-                                    } else false
-                                })
-                            } else if (fileItem.isAudio) {
-                                // three-dot options for single file when not in add mode
-                                IconButton(onClick = {
-                                    // build selected metadata and open options
-                                    val resolvedUri =
-                                        if (resolvedId != null) ContentUris.withAppendedId(
+                                    if (resolvedId == null) return@AnimatedAddButton false
+                                    try {
+                                        val uri = ContentUris.withAppendedId(
                                             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                                             resolvedId
-                                        ).toString() else Uri.fromFile(File(fileItem.path))
-                                            .toString()
-                                    selectedAudioUri = resolvedUri
-                                    // try to fetch title/artist/duration when possible
-                                    var title = File(fileItem.path).name
-                                    var artist = ""
-                                    var duration = 0L
-                                    if (resolvedId != null) {
+                                        ).toString()
+                                        var title = File(fileItem.path).name
+                                        var artist = ""
+                                        var duration = 0L
                                         try {
                                             context.contentResolver.query(
                                                 ContentUris.withAppendedId(
@@ -617,352 +567,211 @@ fun FileBrowserScreen(
                                                     duration = c.getLong(2)
                                                 }
                                             }
-                                        } catch (_: Exception) {
-                                        }
-                                    }
-                                    selectedAudioTitle = title
-                                    selectedAudioArtist = artist
-                                    selectedAudioDuration = duration
-                                    playlists = PlaylistStore.loadAll(context).keys.toList()
-                                    showOptionsMenu = true
-                                    Log.d("FileBrowserScreen", "Options menu requested (file browser) for $title")
-                                 }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.MoreVert,
-                                        contentDescription = "Options",
-                                        tint = Color.White
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(200.dp))
-                    }
-                }
-            }
+                                        } catch (_: Exception) { /* ignore metadata errors */ }
 
-            // Add-all dialog: choose existing playlist or create new
-            if (showAddAllDialog) {
-                AlertDialog(
-                    onDismissRequest = { showAddAllDialog = false },
-                    title = { Text("Add all songs") },
-                    text = {
-                        if (playlists.isEmpty()) {
-                            Column {
-                                Text("Yo don't have any playlist. Create a new one:")
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = {
-                                    showCreatePlaylistDialog = true
-                                }) { Text("New playlist") }
-                            }
-                        } else {
-                            Column {
-                                Text("Select a playlist:")
-                                Spacer(modifier = Modifier.height(8.dp))
-                                // simple vertical list of buttons to pick playlist
-                                playlists.forEach { p ->
-                                    Button(
-                                        onClick = {
-                                            // add all audio files in current directory to playlist p
-                                            val toAdd = files.filter { it.isAudio }
-                                            toAdd.forEach { f ->
-                                                try {
-                                                    val resolvedId = pathToId[f.path]
-                                                    val uri =
-                                                        if (resolvedId != null) ContentUris.withAppendedId(
-                                                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                            resolvedId
-                                                        ).toString() else Uri.fromFile(File(f.path))
-                                                            .toString()
-                                                    var title = File(f.path).name
-                                                    var artist = ""
-                                                    var duration = 0L
-                                                    if (resolvedId != null) {
-                                                        try {
-                                                            context.contentResolver.query(
-                                                                ContentUris.withAppendedId(
-                                                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                                    resolvedId
-                                                                ),
-                                                                arrayOf(
-                                                                    MediaStore.Audio.Media.TITLE,
-                                                                    MediaStore.Audio.Media.ARTIST,
-                                                                    MediaStore.Audio.Media.DURATION
-                                                                ),
-                                                                null,
-                                                                null,
-                                                                null
-                                                            )?.use { c ->
-                                                                if (c.moveToFirst()) {
-                                                                    title = c.getString(0) ?: title
-                                                                    artist = c.getString(1) ?: ""
-                                                                    duration = c.getLong(2)
-                                                                }
-                                                            }
-                                                        } catch (_: Exception) {
-                                                        }
-                                                    }
-                                                    PlaylistStore.addItemToPlaylist(
-                                                        context,
-                                                        p,
-                                                        uri,
-                                                        title,
-                                                        artist,
-                                                        duration
-                                                    )
-                                                } catch (_: Exception) {
-                                                }
-                                            }
-                                            Toast.makeText(
-                                                context,
-                                                "Add ${toAdd.size} songs to '$p'",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                            showAddAllDialog = false
-                                        },
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                    ) { Text(p) }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = { showCreatePlaylistDialog = true },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Create new playlist") }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        Button(onClick = { showAddAllDialog = false }) { Text("Close") }
-                    }
-                )
-            }
-
-            // Create playlist dialog (when adding all and user wants to make a new playlist first)
-            if (showCreatePlaylistDialog) {
-                AlertDialog(
-                    onDismissRequest = { showCreatePlaylistDialog = false },
-                    title = { Text("Playlist name") },
-                    text = {
-                        Column {
-                            TextField(
-                                value = newPlaylistName,
-                                onValueChange = { newPlaylistName = it },
-                                placeholder = { Text("Name") })
-                        }
-                    },
-                    confirmButton = {
-                        Button(onClick = {
-                            val name = newPlaylistName.trim()
-                            if (name.isNotBlank()) {
-                                val ok = PlaylistStore.createPlaylist(context, name)
-                                if (ok) {
-                                    // add all now
-                                    val toAdd = files.filter { it.isAudio }
-                                    toAdd.forEach { f ->
-                                        try {
-                                            val resolvedId = pathToId[f.path]
-                                            val uri =
-                                                if (resolvedId != null) ContentUris.withAppendedId(
-                                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                    resolvedId
-                                                ).toString() else Uri.fromFile(File(f.path))
-                                                    .toString()
-                                            var title = File(f.path).name
-                                            var artist = ""
-                                            var duration = 0L
-                                            if (resolvedId != null) {
-                                                try {
-                                                    context.contentResolver.query(
-                                                        ContentUris.withAppendedId(
-                                                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                            resolvedId
-                                                        ),
-                                                        arrayOf(
-                                                            MediaStore.Audio.Media.TITLE,
-                                                            MediaStore.Audio.Media.ARTIST,
-                                                            MediaStore.Audio.Media.DURATION
-                                                        ),
-                                                        null,
-                                                        null,
-                                                        null
-                                                    )?.use { c ->
-                                                        if (c.moveToFirst()) {
-                                                            title = c.getString(0) ?: title
-                                                            artist = c.getString(1) ?: ""
-                                                            duration = c.getLong(2)
-                                                        }
-                                                    }
-                                                } catch (_: Exception) {
-                                                }
-                                            }
-                                            PlaylistStore.addItemToPlaylist(
-                                                context,
-                                                name,
-                                                uri,
-                                                title,
-                                                artist,
-                                                duration
-                                            )
-                                        } catch (_: Exception) {
-                                        }
-                                    }
-                                    Toast.makeText(
-                                        context,
-                                        "Added ${toAdd.size} songs to '$name'",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    showCreatePlaylistDialog = false
-                                    showAddAllDialog = false
-                                    newPlaylistName = ""
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "This playlist already exists",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        }) { Text("Create and add") }
-                    },
-                    dismissButton = {
-                        Button(onClick = { showCreatePlaylistDialog = false }) { Text("Cancel") }
-                    }
-                )
-            }
-
-            if (showAddToPlaylistDialog) {
-                GenericOptionsSheet(
-                    visible = true,
-                    onDismiss = { showAddToPlaylistDialog = false },
-                    headerContent = {
-                        // title
-                        Text(text = "Add to playlist", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        Spacer(modifier = Modifier.height(8.dp))
-                    },
-                    options = buildList {
-                        // create-new option (non-clickable row that triggers the create dialog when clicked)
-                        add(GenericOptionItem(label = "Create new playlist", icon = Icons.Filled.Add, onClick = {
-                            showCreatePlaylistForSingleDialog = true
-                        }))
-
-                        // playlist entries: show leading image if available and a trailing plus button
-                        playlists.forEach { p ->
-                            add(
-                                GenericOptionItem(
-                                    label = p,
-                                    leadingImageUri = PlaylistStore.getPlaylistImage(context, p),
-                                    defaultLeadingPainterResourceId = com.example.bitsbeats.R.drawable.playlist_default,
-                                    rowClickable = false,
-                                    onClick = {},
-                                    trailingContent = {
-                                        // replace small IconButton+Toast with AnimatedAddButton + circle background
-                                        AnimatedAddButton(
-                                            modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), shape = CircleShape),
-                                            onAdd = {
-                                                try {
-                                                    val uri = selectedAudioUri ?: ""
-                                                    PlaylistStore.addItemToPlaylist(context, p, uri, selectedAudioTitle, selectedAudioArtist, selectedAudioDuration)
-                                                    // close sheet after success
-                                                    showAddToPlaylistDialog = false
-                                                    true
-                                                } catch (_: Exception) { false }
-                                            }
-                                        )
-                                    }
-                                )
-                            )
-                        }
-                    }
-                )
-            }
-
-            // Create playlist dialog used when adding a single item (create and add)
-            if (showCreatePlaylistForSingleDialog) {
-                AlertDialog(
-                    onDismissRequest = { showCreatePlaylistForSingleDialog = false },
-                    title = { Text("Playlist name") },
-                    text = {
-                        Column {
-                            TextField(
-                                value = newPlaylistNameForSingle,
-                                onValueChange = { newPlaylistNameForSingle = it },
-                                placeholder = { Text("Name") })
-                        }
-                    },
-                    confirmButton = {
-                        Button(onClick = {
-                            val name = newPlaylistNameForSingle.trim()
-                            if (name.isNotBlank()) {
-                                val ok = PlaylistStore.createPlaylist(context, name)
-                                if (ok) {
-                                    try {
-                                        val uri = selectedAudioUri ?: ""
-                                        PlaylistStore.addItemToPlaylist(
+                                        // return whether it was actually added (false if duplicate)
+                                        return@AnimatedAddButton PlaylistStore.addItemToPlaylist(
                                             context,
-                                            name,
+                                            addToPlaylistName,
                                             uri,
-                                            selectedAudioTitle,
-                                            selectedAudioArtist,
-                                            selectedAudioDuration
+                                            title,
+                                            artist,
+                                            duration
                                         )
-                                        // removed success Toast: Animated button provides feedback
                                     } catch (_: Exception) {
+                                        return@AnimatedAddButton false
                                     }
-                                    showCreatePlaylistForSingleDialog = false
-                                    showAddToPlaylistDialog = false
-                                    newPlaylistNameForSingle = ""
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "This playlist already exists",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        }) { Text("Create and add") }
-                    },
-                    dismissButton = {
-                        Button(onClick = {
-                            showCreatePlaylistForSingleDialog = false
-                        }) { Text("Cancel") }
-                    }
-                )
+                                })
+                             }
+                         }
+                     }
+                 }
+             }
+         }
+     }
+
+    // --- "Add all" dialog: confirm adding all files in the current directory to a playlist ---
+    if (showAddAllDialog) {
+        val onDismiss = { showAddAllDialog = false }
+        val onConfirm = { playlistName: String ->
+            // add all audio files in the current directory to the selected playlist
+            try {
+                files.filter { it.isAudio }.forEach { fileItem ->
+                    val uri = ContentUris.withAppendedId(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        queryAudioIdFromPath(context.contentResolver, fileItem.path) ?: -1
+                    ).toString()
+                    PlaylistStore.addItemToPlaylist(context, playlistName, uri)
+                }
+                Toast.makeText(context, "Added all to '$playlistName'", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "Error adding files", Toast.LENGTH_SHORT).show()
             }
         }
-
-        // Reusable generic options sheet (header + options)
-        GenericOptionsSheet(
-            visible = showOptionsMenu,
-            onDismiss = { showOptionsMenu = false },
-            headerContent = {
-                // artwork + metadata header (load embedded artwork asynchronously using loadEmbeddedArtwork)
-                val ctx = LocalContext.current
-                var headerBitmap by remember(selectedAudioUri) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-                LaunchedEffect(selectedAudioUri) {
-                    headerBitmap = try {
-                        com.example.bitsbeats.util.loadEmbeddedArtwork(ctx, selectedAudioUri)
-                    } catch (_: Exception) { null }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Add all to playlist") },
+            text = {
+                Column {
+                    Text("Select a playlist to add all files in this folder:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // list available playlists as buttons
+                    playlists.forEach { playlistName ->
+                        Button(
+                            onClick = {
+                                onConfirm(playlistName)
+                                onDismiss()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(playlistName)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    // "New playlist" option
+                    Button(
+                        onClick = {
+                            showCreatePlaylistDialog = true
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("New playlist")
+                    }
+                 }
+             },
+            confirmButton = {},
+            dismissButton = {
+                Button(onClick = onDismiss) {
+                    Text("Cancel")
                 }
+            }
+        )
+    }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (headerBitmap != null) {
-                        Image(bitmap = headerBitmap!!, contentDescription = "Artwork", modifier = Modifier.size(64.dp).clip(CircleShape))
-                    } else {
-                        Image(painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(64.dp))
+    // --- Create new playlist dialog (for "add all" or single items) ---
+    if (showCreatePlaylistDialog || showCreatePlaylistForSingleDialog) {
+        val isSingleItem = showCreatePlaylistForSingleDialog
+        val onDismiss = { if (isSingleItem) showCreatePlaylistForSingleDialog = false else showCreatePlaylistDialog = false }
+        val onConfirm = { playlistName: String ->
+            // create the new playlist and add the selected item(s)
+            try {
+                val uri = selectedAudioUri?.let {
+                    ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.toLong())
+                }
+                val audioTitle = selectedAudioTitle
+                val audioArtist = selectedAudioArtist
+                val audioDuration = selectedAudioDuration
+                val added = if (isSingleItem && uri != null) {
+                    // single item: add to new playlist immediately
+                    PlaylistStore.addItemToPlaylist(context, playlistName, uri.toString(), audioTitle, audioArtist, audioDuration)
+                } else {
+                    // "Add all" case: just create the empty playlist
+                    PlaylistStore.createPlaylist(context, playlistName)
+                }
+                if (added) {
+                    Toast.makeText(context, "Playlist '$playlistName' created", Toast.LENGTH_SHORT).show()
+                    showCreatePlaylistDialog = false
+                    showCreatePlaylistForSingleDialog = false
+                } else {
+                    Toast.makeText(context, "Error creating playlist", Toast.LENGTH_SHORT).show()
+                }
+            } catch (_: Exception) {
+                Toast.makeText(context, "Error", Toast.LENGTH_SHORT).show()
+            }
+        }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Create new playlist") },
+            text = {
+                Column {
+                    Text("Enter a name for the new playlist:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextField(
+                        value = newPlaylistName,
+                        onValueChange = { newPlaylistName = it },
+                        placeholder = { Text("Playlist name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                 }
+             },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val name = newPlaylistName.trim()
+                        if (name.isNotEmpty()) {
+                            onConfirm(name)
+                        } else {
+                            Toast.makeText(context, "Enter a playlist name", Toast.LENGTH_SHORT).show()
+                        }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(selectedAudioTitle.ifEmpty { "No title" }, color = Color.White)
-                        Text(selectedAudioArtist.ifEmpty { "Unknown artist" }, color = Color.LightGray)
-                    }
+                ) {
+                    Text("Create")
                 }
             },
-            options = listOf(
-                GenericOptionItem(label = "Add to playlist", icon = Icons.AutoMirrored.Filled.PlaylistAdd, onClick = {
-                    playlists = PlaylistStore.loadAll(context).keys.toList()
-                    showAddToPlaylistDialog = true
-                })
-            )
+            dismissButton = {
+                Button(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
         )
-    }}
+    }
+
+    // --- Options menu (bottom sheet) for audio file actions ---
+    if (showOptionsMenu) {
+        GenericOptionsSheet(
+            visible = true,
+            onDismiss = { showOptionsMenu = false },
+            options = buildList {
+                // "Play now" action: play the selected audio file immediately
+                add(
+                    GenericOptionItem(
+                        icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                        label = "Play now",
+                        onClick = {
+                            showOptionsMenu = false
+                            onFileSelected(queryAudioIdFromPath(context.contentResolver, selectedAudioUri!!) ?: -1)
+                        }
+                    )
+                )
+                // "Add to playlist" action: show dialog to select a playlist
+                add(
+                    GenericOptionItem(
+                        icon = Icons.Filled.Add,
+                        label = "Add to playlist",
+                        onClick = {
+                            showOptionsMenu = false
+                            // load playlists and show dialog
+                            playlists = PlaylistStore.loadAll(context).keys.toList()
+                            showAddToPlaylistDialog = true
+                        }
+                    )
+                )
+                // "Share" action: share the selected audio file
+                add(
+                    GenericOptionItem(
+                        icon = Icons.Filled.Share,
+                        label = "Share",
+                        onClick = {
+                            showOptionsMenu = false
+                            // TODO: implement share functionality
+                            Toast.makeText(context, "Share not implemented", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                )
+                // "Delete" action: delete the selected audio file (with confirmation)
+                add(
+                    GenericOptionItem(
+                        icon = Icons.Filled.Delete,
+                        label = "Delete",
+                        onClick = {
+                            showOptionsMenu = false
+                            // TODO: implement delete functionality
+                            Toast.makeText(context, "Delete not implemented", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                )
+            }
+        )
+    }
+}
