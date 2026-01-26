@@ -76,6 +76,7 @@ import com.example.bitsbeats.data.MediaRepository.queryAudioIdFromPath
 import com.example.bitsbeats.ui.components.PlaylistStore
 import com.example.bitsbeats.ui.components.GenericOptionsSheet
 import com.example.bitsbeats.ui.components.GenericOptionItem
+import com.example.bitsbeats.ui.components.PlaybackController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -161,6 +162,18 @@ fun FileList(
 ) {
     val context = LocalContext.current
 
+    // Track currently playing URI so we can highlight the playing track (same behavior as PlaylistDetailScreen)
+    var currentPlayingUri by remember { mutableStateOf(PlaybackController.currentUri) }
+    DisposableEffect(Unit) {
+        val listener = object : PlaybackController.PlaybackStateListener {
+            override fun onPlaybackStateChanged(snapshot: PlaybackController.PlaybackStateSnapshot) {
+                currentPlayingUri = snapshot.currentUri
+            }
+        }
+        try { PlaybackController.addStateListener(listener) } catch (_: Exception) {}
+        onDispose { try { PlaybackController.removeStateListener(listener) } catch (_: Exception) {} }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -203,8 +216,11 @@ fun FileList(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Column(modifier = Modifier.weight(1f).clickable { onFileSelected(audio.id) }) {
-                        Text(audio.title, color = Color.White)
-                        Text(audio.artist.ifEmpty { "Unknown artist" }, color = Color.LightGray)
+                        val isPlayingHere = audioUriString.isNotBlank() && audioUriString == currentPlayingUri
+                        val titleColor = if (isPlayingHere) Color(0xFF897DB2) else Color.White
+                        val artistColor = if (isPlayingHere) Color(0xFF897DB2) else Color.LightGray
+                        Text(audio.title, color = titleColor)
+                        Text(audio.artist.ifEmpty { "Unknown artist" }, color = artistColor)
                     }
 
                     if (addToPlaylistName != null) {
@@ -240,27 +256,31 @@ fun FileList(
                         Icon(imageVector = Icons.Filled.Folder, contentDescription = "Folder", tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
                     } else if (fileItem.isAudio) {
-                        val uriString = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
-                        var embeddedBitmap by remember(uriString) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-                        LaunchedEffect(uriString) { embeddedBitmap = try { com.example.bitsbeats.util.loadEmbeddedArtwork(context, uriString) } catch (_: Exception) { null } }
+                         val uriString = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
+                         var embeddedBitmap by remember(uriString) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                         LaunchedEffect(uriString) { embeddedBitmap = try { com.example.bitsbeats.util.loadEmbeddedArtwork(context, uriString) } catch (_: Exception) { null } }
 
-                        if (embeddedBitmap != null) {
-                            Image(bitmap = embeddedBitmap!!, contentDescription = "Artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
-                        } else {
-                            Image(painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                    } else {
-                        Icon(imageVector = Icons.Filled.Folder, contentDescription = "File", tint = Color.LightGray)
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
+                         if (embeddedBitmap != null) {
+                             Image(bitmap = embeddedBitmap!!, contentDescription = "Artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
+                         } else {
+                             Image(painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
+                         }
+                         Spacer(modifier = Modifier.width(8.dp))
+                     } else {
+                         Icon(imageVector = Icons.Filled.Folder, contentDescription = "File", tint = Color.LightGray)
+                         Spacer(modifier = Modifier.width(8.dp))
+                     }
 
                     Column(modifier = Modifier.weight(1f).clickable {
                         if (fileItem.isDirectory) onEnterDirectory(fileItem.path) else if (fileItem.isAudio) {
                             if (resolvedId != null) onFileSelected(resolvedId) else Toast.makeText(context, "Not indexed in MediaStore", Toast.LENGTH_SHORT).show()
                         }
                     }) {
-                        Text(fileItem.name, color = Color.White)
+                        // highlight if currently playing
+                        val fileUriForCompare = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
+                        val isPlayingHere = fileUriForCompare.isNotBlank() && fileUriForCompare == currentPlayingUri
+                        val titleColor = if (isPlayingHere) Color(0xFF897DB2) else Color.White
+                        Text(fileItem.name, color = titleColor)
                     }
 
                     if (fileItem.isAudio && addToPlaylistName != null) {
@@ -279,7 +299,7 @@ fun FileList(
                             } catch (_: Exception) { return@AnimatedAddButton false }
                         })
                     } else if (fileItem.isAudio) {
-                        val uriString = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
+                         val uriString = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
                         IconButton(onClick = {
                             // try to fill title/artist/duration when available
                             var title = File(fileItem.path).name
@@ -301,6 +321,7 @@ fun FileList(
                                 }
                             } catch (_: Exception) {}
 
+                            // preserve existing onShowOptions behavior
                             onShowOptions(uriString, title, artist, duration)
                         }) {
                             Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Options", tint = Color.White)
