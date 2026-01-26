@@ -11,6 +11,9 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,8 +78,72 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.text.ifEmpty
 import kotlin.text.startsWith
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.launch
 
-// Extend FileBrowserScreen to support adding to playlist and previewing
+// Reusable animated '+' button with shorter success pop and a failure shake.
+@Composable
+private fun AnimatedAddButton(
+    modifier: Modifier = Modifier,
+    tint: Color = Color.White,
+    onAdd: () -> Boolean
+) {
+    val scope = rememberCoroutineScope()
+    val animScaleX = remember { Animatable(1f) }
+    val animScaleY = remember { Animatable(1f) }
+    val animRotation = remember { Animatable(0f) }
+    val animOffsetX = remember { Animatable(0f) } // for shake on failure
+
+    IconButton(onClick = {
+        val added = try {
+            onAdd()
+        } catch (_: Exception) {
+            false
+        }
+        // Run animation depending on success/failure
+        scope.launch {
+            if (added) {
+                val peakMs = 100
+                val backMs = 100
+                // peak: scale to 2x and rotate to +40deg in parallel
+                val j1 = launch { animScaleX.animateTo(2f, animationSpec = tween(durationMillis = peakMs, easing = FastOutSlowInEasing)) }
+                val j2 = launch { animScaleY.animateTo(2f, animationSpec = tween(durationMillis = peakMs, easing = FastOutSlowInEasing)) }
+                j1.join(); j2.join();
+
+                // return to identity quickly with same non-linear easing
+                val k1 = launch { animScaleX.animateTo(1f, animationSpec = tween(durationMillis = backMs, easing = FastOutSlowInEasing)) }
+                val k2 = launch { animScaleY.animateTo(1f, animationSpec = tween(durationMillis = backMs, easing = FastOutSlowInEasing)) }
+                k1.join(); k2.join();
+
+                // ensure offset reset
+                animOffsetX.animateTo(0f, animationSpec = tween(30))
+            } else {
+                // FAILURE / already added: small left-right shake, total ~100ms
+                // sequence timings: left 30ms, right 30ms, small left 20ms, return 20ms = 100ms
+                val leftMs = 30
+                val rightMs = 30
+                val smallLeftMs = 20
+                val backMs = 20
+                val dist = 10f
+                animOffsetX.animateTo(-dist, animationSpec = tween(durationMillis = leftMs, easing = FastOutSlowInEasing))
+                animOffsetX.animateTo(dist, animationSpec = tween(durationMillis = rightMs, easing = FastOutSlowInEasing))
+                animOffsetX.animateTo(-dist * 0.5f, animationSpec = tween(durationMillis = smallLeftMs, easing = FastOutSlowInEasing))
+                animOffsetX.animateTo(0f, animationSpec = tween(durationMillis = backMs, easing = FastOutSlowInEasing))
+
+            }
+        }
+    }) {
+        Box(modifier = modifier.graphicsLayer {
+            scaleX = animScaleX.value
+            scaleY = animScaleY.value
+            translationX = animOffsetX.value
+        }, contentAlignment = Alignment.Center) {
+            Icon(imageVector = Icons.Filled.Add, contentDescription = "Add", tint = tint)
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileBrowserScreen(
@@ -335,31 +402,26 @@ fun FileBrowserScreen(
 
                             // If we're in add-to-playlist flow we show '+' that adds directly to the provided playlist name
                             if (addToPlaylistName != null) {
-                                IconButton(onClick = {
-                                    val uri = ContentUris.withAppendedId(
-                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                        audio.id
-                                    ).toString()
-                                    PlaylistStore.addItemToPlaylist(
-                                        context,
-                                        addToPlaylistName,
-                                        uri,
-                                        audio.title,
-                                        audio.artist,
-                                        audio.duration
-                                    )
-                                    Toast.makeText(
-                                        context,
-                                        "Add to $addToPlaylistName",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Add,
-                                        contentDescription = "Add",
-                                        tint = Color.White
-                                    )
-                                }
+                                // replaced plain IconButton+Toast with AnimatedAddButton; success toast removed
+                                AnimatedAddButton(tint = Color.White, onAdd = {
+                                    try {
+                                        val uri = ContentUris.withAppendedId(
+                                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                            audio.id
+                                        ).toString()
+                                        PlaylistStore.addItemToPlaylist(
+                                            context,
+                                            addToPlaylistName,
+                                            uri,
+                                            audio.title,
+                                            audio.artist,
+                                            audio.duration
+                                        )
+                                        true
+                                    } catch (_: Exception) {
+                                        false
+                                    }
+                                })
                             } else {
                                 // not in "add mode": show three-dot options icon that opens the bottom sheet
                                 IconButton(onClick = {
@@ -471,64 +533,53 @@ fun FileBrowserScreen(
 
                             // If we're in add-to-playlist flow we show '+' that adds directly to the provided playlist name
                             if (fileItem.isAudio && addToPlaylistName != null) {
-                                IconButton(onClick = {
+                                AnimatedAddButton(tint = Color.White, onAdd = {
                                     if (resolvedId != null) {
-                                        val uri = ContentUris.withAppendedId(
-                                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                            resolvedId
-                                        ).toString()
-                                        var title = File(fileItem.path).name
-                                        var artist = ""
-                                        var duration = 0L
                                         try {
-                                            context.contentResolver.query(
-                                                ContentUris.withAppendedId(
-                                                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                                                    resolvedId
-                                                ),
-                                                arrayOf(
-                                                    MediaStore.Audio.Media.TITLE,
-                                                    MediaStore.Audio.Media.ARTIST,
-                                                    MediaStore.Audio.Media.DURATION
-                                                ),
-                                                null,
-                                                null,
-                                                null
-                                            )?.use { c ->
-                                                if (c.moveToFirst()) {
-                                                    title = c.getString(0) ?: title
-                                                    artist = c.getString(1) ?: ""
-                                                    duration = c.getLong(2)
+                                            val uri = ContentUris.withAppendedId(
+                                                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                                resolvedId
+                                            ).toString()
+                                            var title = File(fileItem.path).name
+                                            var artist = ""
+                                            var duration = 0L
+                                            try {
+                                                context.contentResolver.query(
+                                                    ContentUris.withAppendedId(
+                                                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                                        resolvedId
+                                                    ),
+                                                    arrayOf(
+                                                        MediaStore.Audio.Media.TITLE,
+                                                        MediaStore.Audio.Media.ARTIST,
+                                                        MediaStore.Audio.Media.DURATION
+                                                    ),
+                                                    null,
+                                                    null,
+                                                    null
+                                                )?.use { c ->
+                                                    if (c.moveToFirst()) {
+                                                        title = c.getString(0) ?: title
+                                                        artist = c.getString(1) ?: ""
+                                                        duration = c.getLong(2)
+                                                    }
                                                 }
+                                            } catch (_: Exception) {
                                             }
+                                            PlaylistStore.addItemToPlaylist(
+                                                context,
+                                                addToPlaylistName,
+                                                uri,
+                                                title,
+                                                artist,
+                                                duration
+                                            )
+                                            true
                                         } catch (_: Exception) {
+                                            false
                                         }
-                                        PlaylistStore.addItemToPlaylist(
-                                            context,
-                                            addToPlaylistName,
-                                            uri,
-                                            title,
-                                            artist,
-                                            duration
-                                        )
-                                        Toast.makeText(
-                                            context,
-                                            "Added to $addToPlaylistName",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else Toast.makeText(
-                                        context,
-                                        "Not indexed",
-                                        Toast.LENGTH_SHORT
-                                    )
-                                        .show()
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Add,
-                                        contentDescription = "Add",
-                                        tint = Color.White
-                                    )
-                                }
+                                    } else false
+                                })
                             } else if (fileItem.isAudio) {
                                 // three-dot options for single file when not in add mode
                                 IconButton(onClick = {
@@ -805,18 +856,19 @@ fun FileBrowserScreen(
                                     rowClickable = false,
                                     onClick = {},
                                     trailingContent = {
-                                        IconButton(onClick = {
-                                            try {
-                                                val uri = selectedAudioUri ?: ""
-                                                PlaylistStore.addItemToPlaylist(context, p, uri, selectedAudioTitle, selectedAudioArtist, selectedAudioDuration)
-                                                Toast.makeText(context, "Added to '$p'", Toast.LENGTH_SHORT).show()
-                                            } catch (_: Exception) { }
-                                            showAddToPlaylistDialog = false
-                                        }) {
-                                            Box(modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), shape = CircleShape), contentAlignment = Alignment.Center) {
-                                               Icon(imageVector = Icons.Filled.Add, contentDescription = "Add")
+                                        // replace small IconButton+Toast with AnimatedAddButton + circle background
+                                        AnimatedAddButton(
+                                            modifier = Modifier.size(36.dp).background(Color(0xFF2E2E2E), shape = CircleShape),
+                                            onAdd = {
+                                                try {
+                                                    val uri = selectedAudioUri ?: ""
+                                                    PlaylistStore.addItemToPlaylist(context, p, uri, selectedAudioTitle, selectedAudioArtist, selectedAudioDuration)
+                                                    // close sheet after success
+                                                    showAddToPlaylistDialog = false
+                                                    true
+                                                } catch (_: Exception) { false }
                                             }
-                                        }
+                                        )
                                     }
                                 )
                             )
@@ -854,11 +906,7 @@ fun FileBrowserScreen(
                                             selectedAudioArtist,
                                             selectedAudioDuration
                                         )
-                                        Toast.makeText(
-                                            context,
-                                            "Added to '$name'",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        // removed success Toast: Animated button provides feedback
                                     } catch (_: Exception) {
                                     }
                                     showCreatePlaylistForSingleDialog = false
