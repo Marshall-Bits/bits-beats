@@ -585,6 +585,9 @@ fun FileBrowserScreen(
                              }
                          }
                      }
+                    item {
+                        Spacer(modifier = Modifier.height(200.dp))
+                    }
                  }
              }
          }
