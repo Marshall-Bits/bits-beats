@@ -2,12 +2,15 @@ package com.example.bitsbeats.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -15,6 +18,7 @@ import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -39,7 +43,7 @@ import com.example.bitsbeats.util.formatDuration
 import kotlinx.coroutines.isActive
 
 @Composable
-fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
+fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true, onNavigateToPlaylistDetail: (String) -> Unit = {}) {
     val context = LocalContext.current
 
     // When navigated with an audioId play it; if -1 restore last
@@ -70,9 +74,18 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(24.dp)) {
-            // Active playlist indicator
-            if (PlaybackController.activePlaylistName != null) {
-                Text(text = "Active playlist: ${PlaybackController.activePlaylistName}", fontSize = 14.sp, color = Color.LightGray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            // Active playlist indicator (icon + text) — clickable to navigate to playlist detail
+            val activePlaylist = PlaybackController.activePlaylistName
+            if (!activePlaylist.isNullOrBlank()) {
+                Row(modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { try { onNavigateToPlaylistDetail(activePlaylist) } catch (_: Exception) {} }
+                    , horizontalArrangement =  Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "Playlist", tint = Color.LightGray, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Active playlist: $activePlaylist", fontSize = 14.sp, color = Color.LightGray)
+                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 

@@ -145,14 +145,28 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("player") {
-                            PlayerScreen(audioId = -1L, restoreIfNoCurrent = false)
+                            PlayerScreen(audioId = -1L, restoreIfNoCurrent = false, onNavigateToPlaylistDetail = { name ->
+                                try {
+                                    val enc = URLEncoder.encode(name, "UTF-8")
+                                    navController.navigate("playlistDetail/$enc")
+                                } catch (_: Exception) {
+                                    navController.navigate("playlist")
+                                }
+                            })
                         }
 
                         composable("player/{audioId}") { backStackEntry ->
                             val audioId =
                                 backStackEntry.arguments?.getString("audioId")?.toLongOrNull()
                                     ?: -1L
-                            PlayerScreen(audioId = audioId)
+                            PlayerScreen(audioId = audioId, onNavigateToPlaylistDetail = { name ->
+                                try {
+                                    val enc = URLEncoder.encode(name, "UTF-8")
+                                    navController.navigate("playlistDetail/$enc")
+                                } catch (_: Exception) {
+                                    navController.navigate("playlist")
+                                }
+                            })
                         }
 
                         composable("playlist") {
