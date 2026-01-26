@@ -40,6 +40,8 @@ object StatsStore {
             entry.put("count", cnt)
             entry.put("lastPlayed", now)
             if (!title.isNullOrBlank()) entry.put("title", title)
+            // also store artist on the song entry when available so UI can display it
+            if (!artist.isNullOrBlank()) entry.put("artist", artist)
             songs.put(uri, entry)
 
             // global quick access

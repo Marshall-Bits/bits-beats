@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
@@ -25,7 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun HomeScreen(onNavigateToPlayer: () -> Unit, onNavigateToPlaylist: () -> Unit, onNavigateToFileBrowser: () -> Unit = {}) {
+fun HomeScreen(
+    onNavigateToPlayer: () -> Unit,
+    onNavigateToPlaylist: () -> Unit,
+    onNavigateToFileBrowser: () -> Unit = {},
+    onNavigateToStats: () -> Unit = {}
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -87,6 +93,20 @@ fun HomeScreen(onNavigateToPlayer: () -> Unit, onNavigateToPlaylist: () -> Unit,
                         tint = Color.White
                     )
                 }
+
+                // Botón de estadísticas
+
+            }
+            IconButton(
+                onClick = onNavigateToStats,
+                modifier = Modifier.size(100.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Assessment,
+                    contentDescription = "Estadísticas",
+                    modifier = Modifier.size(80.dp),
+                    tint = Color.White
+                )
             }
         }
     }

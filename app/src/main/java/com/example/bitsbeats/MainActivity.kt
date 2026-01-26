@@ -131,7 +131,8 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 onNavigateToPlayer = { navController.navigate("player/-1") },
                                 onNavigateToPlaylist = { navController.navigate("playlist") },
-                                onNavigateToFileBrowser = { navController.navigate("filebrowser") }
+                                onNavigateToFileBrowser = { navController.navigate("filebrowser") },
+                                onNavigateToStats = { navController.navigate("stats") }
                             )
                         }
 
@@ -213,6 +214,11 @@ class MainActivity : ComponentActivity() {
                                 onNavigateBack = { navController.popBackStack() },
                                 addToPlaylistName = playlistName
                             )
+                        }
+
+                        // Stats screen: shows app playback statistics
+                        composable("stats") {
+                            com.example.bitsbeats.ui.screens.StatsScreen(onBack = { navController.popBackStack() })
                         }
                     }
 
