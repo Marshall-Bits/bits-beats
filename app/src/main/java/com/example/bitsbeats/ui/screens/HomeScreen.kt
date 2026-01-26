@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -80,6 +81,8 @@ fun HomeScreen(
 
     // Top 4 most-played songs from stats (uri -> count)
     val topSongs = remember { StatsStore.topSongs(ctx, 4) }
+    // observe current playing URI so we can highlight matching favorites
+    val currentPlayingUri = PlaybackController.currentUri
 
     Box(
         modifier = Modifier
@@ -89,8 +92,8 @@ fun HomeScreen(
     ) {
         Column(modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally) {
+            .statusBarsPadding(),
+            ) {
 
             // App logo (small) and lowercase name
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -138,7 +141,7 @@ fun HomeScreen(
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     if (leftTwo.size > 0) {
                         Box(modifier = Modifier.weight(1f)) {
-                            SongTile(ctx = ctx, songUri = leftTwo[0].first, onClick = { uri: String ->
+                            SongTile(ctx = ctx, songUri = leftTwo[0].first, isPlaying = (currentPlayingUri == leftTwo[0].first), onClick = { uri: String ->
                                 try { PlaybackController.playQueue(ctx, listOf(uri), 0) } catch (_: Exception) {}
                             })
                         }
@@ -148,7 +151,7 @@ fun HomeScreen(
 
                     if (leftTwo.size > 1) {
                         Box(modifier = Modifier.weight(1f)) {
-                            SongTile(ctx = ctx, songUri = leftTwo[1].first, onClick = { uri: String ->
+                            SongTile(ctx = ctx, songUri = leftTwo[1].first, isPlaying = (currentPlayingUri == leftTwo[1].first), onClick = { uri: String ->
                                 try { PlaybackController.playQueue(ctx, listOf(uri), 0) } catch (_: Exception) {}
                             })
                         }
@@ -161,7 +164,7 @@ fun HomeScreen(
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     if (rightTwo.size > 0) {
                         Box(modifier = Modifier.weight(1f)) {
-                            SongTile(ctx = ctx, songUri = rightTwo[0].first, onClick = { uri: String -> try { PlaybackController.playQueue(ctx, listOf(uri), 0) } catch (_: Exception) {} })
+                            SongTile(ctx = ctx, songUri = rightTwo[0].first, isPlaying = (currentPlayingUri == rightTwo[0].first), onClick = { uri: String -> try { PlaybackController.playQueue(ctx, listOf(uri), 0) } catch (_: Exception) {} })
                         }
                     } else Spacer(modifier = Modifier.weight(1f))
 
@@ -169,7 +172,7 @@ fun HomeScreen(
 
                     if (rightTwo.size > 1) {
                         Box(modifier = Modifier.weight(1f)) {
-                            SongTile(ctx = ctx, songUri = rightTwo[1].first, onClick = { uri: String -> try { PlaybackController.playQueue(ctx, listOf(uri), 0) } catch (_: Exception) {} })
+                            SongTile(ctx = ctx, songUri = rightTwo[1].first, isPlaying = (currentPlayingUri == rightTwo[1].first), onClick = { uri: String -> try { PlaybackController.playQueue(ctx, listOf(uri), 0) } catch (_: Exception) {} })
                         }
                     } else Spacer(modifier = Modifier.weight(1f))
                 }
@@ -267,7 +270,7 @@ private fun PlaylistTile(ctx: android.content.Context, playlistName: String, onC
 }
 
 @Composable
-private fun SongTile(ctx: android.content.Context, songUri: String, onClick: (String) -> Unit) {
+private fun SongTile(ctx: android.content.Context, songUri: String, isPlaying: Boolean = false, onClick: (String) -> Unit) {
     // Similar compact tile but for a song URI: artwork on left, title on the right
     val artwork = produceState(initialValue = null as androidx.compose.ui.graphics.ImageBitmap?, key1 = songUri) {
         value = null
@@ -321,7 +324,8 @@ private fun SongTile(ctx: android.content.Context, songUri: String, onClick: (St
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title.value.ifBlank { songUri }, color = Color.White)
+            val titleColor = if (isPlaying) Color(0xFF897DB2) else Color.White
+            Text(text = title.value.ifBlank { songUri }, color = titleColor)
         }
     }
 }
