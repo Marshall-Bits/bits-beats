@@ -132,7 +132,15 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToPlayer = { navController.navigate("player/-1") },
                                 onNavigateToPlaylist = { navController.navigate("playlist") },
                                 onNavigateToFileBrowser = { navController.navigate("filebrowser") },
-                                onNavigateToStats = { navController.navigate("stats") }
+                                onNavigateToStats = { navController.navigate("stats") },
+                                onNavigateToPlaylistDetail = { name ->
+                                    try {
+                                        val enc = URLEncoder.encode(name, "UTF-8")
+                                        navController.navigate("playlistDetail/$enc")
+                                    } catch (_: Exception) {
+                                        navController.navigate("playlist")
+                                    }
+                                }
                             )
                         }
 
