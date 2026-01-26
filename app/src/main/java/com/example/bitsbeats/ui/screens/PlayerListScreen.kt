@@ -102,7 +102,9 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
     // refresh when returning
     LaunchedEffect(Unit) { /* no-op; UI will update on actions */ }
 
-    Box(modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color(0xFF010000)), contentAlignment = Alignment.TopCenter) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color(0xFF010000))) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = "Playlists", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(16.dp))
 
@@ -121,7 +123,9 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
                 val bottomNavPadding = 180.dp
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    modifier = Modifier.fillMaxSize().padding(8.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp),
                     contentPadding = PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = bottomNavPadding),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -174,7 +178,9 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text(text = name, color = Color.White, modifier = Modifier.weight(1f), fontSize = 14.sp)
 
                                     Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
@@ -301,7 +307,9 @@ fun PlaylistScreen(onNavigateToPlaylistDetail: (String) -> Unit = {}, onCreatePl
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (headerBmp.value != null) {
-                            Image(bitmap = headerBmp.value!!, contentDescription = "Playlist image", modifier = Modifier.size(64.dp).clip(RoundedCornerShape(4.dp)))
+                            Image(bitmap = headerBmp.value!!, contentDescription = "Playlist image", modifier = Modifier
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(4.dp)))
                         } else {
                             Image(painter = painterResource(id = R.drawable.playlist_default), contentDescription = "Playlist image", modifier = Modifier.size(64.dp))
                         }
