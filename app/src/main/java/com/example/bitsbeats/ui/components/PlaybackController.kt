@@ -142,6 +142,8 @@ object PlaybackController {
         // remember the optional playlist name for UI/navigation
         activePlaylistName = playlistName
         appContext = context.applicationContext
+        // record that the playlist was played (if provided)
+        try { if (!playlistName.isNullOrBlank()) StatsStore.recordPlaylistPlay(context, playlistName) } catch (_: Exception) {}
         saveState(context) // persist queue immediately
         playCurrentFromQueue()
         notifyStateChanged()
@@ -240,6 +242,11 @@ object PlaybackController {
             }
 
             saveState(context)
+            // record song play (and artist count) after successful start
+            try {
+                val uriStr = uri.toString()
+                StatsStore.recordSongPlay(context, uriStr, title, artist)
+            } catch (_: Exception) {}
             notifyStateChanged()
         } catch (_: Exception) {
             isPlaying = false
@@ -308,6 +315,8 @@ object PlaybackController {
                     queueIndex = 0
                     appContext?.let { saveState(it) }
                     playCurrentFromQueue()
+                    // when wrapping because of REPEAT_ALL, count another playlist play when we have an active playlist name
+                    try { appContext?.let { ctx -> activePlaylistName?.let { StatsStore.recordPlaylistPlay(ctx, it) } } } catch (_: Exception) {}
                     notifyStateChanged()
                 }
             }
