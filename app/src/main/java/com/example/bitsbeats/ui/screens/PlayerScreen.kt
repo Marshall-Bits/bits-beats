@@ -142,7 +142,7 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 // Shuffle on the left
                 val shuffleOn = PlaybackController.shuffleEnabled
-                val shuffleTint = if (shuffleOn) Color(0xFF1DB954) else Color.White
+                val shuffleTint = if (shuffleOn) Color(0xFF897DB2) else Color.White
                 IconButton(onClick = { PlaybackController.toggleShuffle() }, modifier = Modifier.size(48.dp)) {
                     Icon(imageVector = Icons.Filled.Shuffle, contentDescription = "Shuffle", modifier = Modifier.size(28.dp), tint = shuffleTint)
                 }
@@ -171,7 +171,7 @@ fun PlayerScreen(audioId: Long = -1L, restoreIfNoCurrent: Boolean = true) {
                 val repeatMode = PlaybackController.repeatMode
                 val repeatActive = repeatMode != PlaybackController.RepeatMode.OFF
                 val repeatIcon = if (repeatMode == PlaybackController.RepeatMode.REPEAT_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat
-                val repeatTint = if (repeatActive) Color(0xFF1DB954) else Color.White
+                val repeatTint = if (repeatActive) Color(0xFF897DB2) else Color.White
                 IconButton(onClick = { PlaybackController.toggleRepeatMode() }, modifier = Modifier.size(48.dp)) {
                     Icon(imageVector = repeatIcon, contentDescription = "Repeat mode", modifier = Modifier.size(28.dp), tint = repeatTint)
                 }

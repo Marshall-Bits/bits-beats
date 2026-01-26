@@ -475,7 +475,7 @@ fun FileBrowserScreen(
                             Icon(
                                 imageVector = Icons.Filled.SdCard,
                                 contentDescription = "SD Card",
-                                tint = Color(0xFFFFD54F)
+                                tint = Color(0xFF897DB2)
                             )
                         }
                     }
@@ -487,7 +487,7 @@ fun FileBrowserScreen(
                         Icon(
                             imageVector = Icons.Filled.Folder,
                             contentDescription = "Explore",
-                            tint = Color(0xFFFFD54F)
+                            tint = Color(0xFF897DB2)
                         )
                     }
                     // "Add all" icon: only visible when browsing and current directory has audio files
