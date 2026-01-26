@@ -297,12 +297,12 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.clickable { navController.navigate("home") }) {
                                 Icon(
                                     imageVector = Icons.Filled.Home,
-                                    contentDescription = "Inicio",
+                                    contentDescription = "Home",
                                     tint = Color.White,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = "Inicio", color = Color.White, fontSize = 12.sp)
+                                Text(text = "Home", color = Color.White, fontSize = 12.sp)
                             }
 
                             // Playlists
@@ -325,12 +325,12 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.clickable { navController.navigate("search") }) {
                                 Icon(
                                     imageVector = Icons.Filled.Search,
-                                    contentDescription = "Buscar",
+                                    contentDescription = "Search",
                                     tint = Color.White,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = "Buscar", color = Color.White, fontSize = 12.sp)
+                                Text(text = "Search", color = Color.White, fontSize = 12.sp)
                             }
                         }
                     }
