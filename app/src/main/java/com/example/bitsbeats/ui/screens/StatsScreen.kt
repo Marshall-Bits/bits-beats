@@ -1,5 +1,6 @@
 package com.example.bitsbeats.ui.screens
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,11 +25,12 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatsScreen(onBack: () -> Unit) {
+fun StatsScreen(onNavigateBack: () -> Unit) {
     val ctx = LocalContext.current
     val stats = StatsStore.exportStats(ctx)
     val topSongs = StatsStore.topSongs(ctx, 5)
 
+    @SuppressLint("DefaultLocale")
     fun formatMs(ms: Long): String {
         if (ms <= 0L) return "0:00"
         val hours = ms / 3600000L
@@ -63,7 +65,7 @@ fun StatsScreen(onBack: () -> Unit) {
         TopAppBar(
             title = { Text("Statistics", color = Color.White) },
             navigationIcon = {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White) }
+                IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White) }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF010000))
         )

@@ -202,7 +202,7 @@ class MainActivity : ComponentActivity() {
                             PlaylistDetailScreen(
                                 playlistName = id,
                                 // navigate to the playlists list (route without parameter) when pressing back
-                                onBackToList = { navController.navigate("playlistDetail") },
+                                onNavigateBack = { navController.popBackStack() },
                                 onAddSongs = {
                                     val enc = URLEncoder.encode(id, "UTF-8")
                                     navController.navigate("filebrowser/$enc")
@@ -240,7 +240,7 @@ class MainActivity : ComponentActivity() {
 
                         // Stats screen: shows app playback statistics
                         composable("stats") {
-                            com.example.bitsbeats.ui.screens.StatsScreen(onBack = { navController.popBackStack() })
+                            com.example.bitsbeats.ui.screens.StatsScreen(onNavigateBack = { navController.popBackStack() })
                         }
 
                         // Search screen: live search across MediaStore and file system

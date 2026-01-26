@@ -74,8 +74,8 @@ import kotlinx.coroutines.sync.Mutex
 fun PlaylistDetailScreen(
     playlistName: String,
     onAddSongs: () -> Unit = {},
-    // new callback: navigate back to the playlists list directly
-    onBackToList: () -> Unit = {}
+    // callback: navigate back to the previous screen
+    onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var items by remember { mutableStateOf(PlaylistStore.getPlaylist(context, playlistName)) }
@@ -189,7 +189,7 @@ fun PlaylistDetailScreen(
         TopAppBar(
             title = { Text(text = playlistName, color = Color.White) },
             navigationIcon = {
-                IconButton(onClick = { onBackToList() }) {
+                IconButton(onClick = { onNavigateBack() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
@@ -293,8 +293,8 @@ fun PlaylistDetailScreen(
                                 Toast.makeText(context, "Renamed to '$newN'", Toast.LENGTH_SHORT)
                                     .show()
                                 showRenameDialog = false
-                                // navigate back to list so user can open the renamed playlist
-                                onBackToList()
+                                // navigate back to previous screen so user can open the renamed playlist
+                                onNavigateBack()
                             } else {
                                 Toast.makeText(
                                     context,
@@ -328,7 +328,7 @@ fun PlaylistDetailScreen(
                             }
                             Toast.makeText(context, "Playlist deleted", Toast.LENGTH_SHORT).show()
                             showDeleteConfirm = false
-                            onBackToList()
+                            onNavigateBack()
                         } catch (_: Exception) {
                             Toast.makeText(
                                 context,

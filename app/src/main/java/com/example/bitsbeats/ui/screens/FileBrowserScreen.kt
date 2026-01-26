@@ -436,28 +436,7 @@ fun FileBrowserScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        if (showFileBrowser) {
-                            // Determine the active root (SD card when current path is on SD, otherwise primary)
-                            val primaryRoot = Environment.getExternalStorageDirectory().absolutePath
-                            val activeRoot = sdCardRoot?.takeIf { currentPath.startsWith(it) } ?: primaryRoot
-
-                            // If we're at the active root, go back to recent songs; otherwise go one directory up
-                            if (currentPath == activeRoot) {
-                                showFileBrowser = false
-                            } else {
-                                val parentPath = File(currentPath).parent
-                                currentPath = if (parentPath != null && parentPath.startsWith(activeRoot)) {
-                                    parentPath
-                                } else {
-                                    // fallback: jump to active root
-                                    activeRoot
-                                }
-                            }
-                        } else {
-                            onNavigateBack()
-                        }
-                    }) {
+                    IconButton(onClick = { onNavigateBack() }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
