@@ -348,7 +348,30 @@ fun PlaylistDetailScreen(
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
-            ) { Text("No songs in this playlist", color = Color.White) }
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Large circular plus button that triggers the same action as "Add songs"
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF2E2E2E))
+                            .clickable { onAddSongs() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Add songs",
+                            tint = Color.White,
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Text("No songs in this playlist", color = Color.White)
+                }
+            }
         } else {
             LazyColumn(modifier = Modifier
                 .fillMaxSize()
