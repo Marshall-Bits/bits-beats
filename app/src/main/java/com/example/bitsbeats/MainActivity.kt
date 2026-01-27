@@ -37,6 +37,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,6 +61,8 @@ import com.example.bitsbeats.ui.screens.PlaylistDetailScreen
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // enforce portrait as a best-effort fallback for older devices; some newer Android versions may ignore fixed orientations
+        try { requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT } catch (_: Exception) {}
         // Request notification permission on Android 13+
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -98,103 +104,104 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {}
                 }
                 Box(modifier = Modifier.fillMaxSize()) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = "home",
-                        enterTransition = {
-                            slideIntoContainer(
-                                towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                                animationSpec = tween(300)
-                            )
-                        },
-                        exitTransition = {
-                            slideOutOfContainer(
-                                towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                                animationSpec = tween(300)
-                            )
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(
-                                towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                                animationSpec = tween(300)
-                            )
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(
-                                towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                                animationSpec = tween(300)
-                            )
-                        }
-                    ) {
-                        composable("home") {
-                            HomeScreen(
-                                onNavigateToPlayer = { navController.navigate("player/-1") },
-                                onNavigateToPlaylist = { navController.navigate("playlist") },
-                                onNavigateToFileBrowser = { navController.navigate("filebrowser") },
-                                onNavigateToStats = { navController.navigate("stats") },
-                                onNavigateToPlaylistDetail = { name ->
+                    PortraitEnforcer {
+                        NavHost(
+                            navController = navController,
+                            startDestination = "home",
+                            enterTransition = {
+                                slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                                    animationSpec = tween(300)
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                                    animationSpec = tween(300)
+                                )
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                                    animationSpec = tween(300)
+                                )
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                                    animationSpec = tween(300)
+                                )
+                            }
+                        ) {
+                            composable("home") {
+                                HomeScreen(
+                                    onNavigateToPlayer = { navController.navigate("player/-1") },
+                                    onNavigateToPlaylist = { navController.navigate("playlist") },
+                                    onNavigateToFileBrowser = { navController.navigate("filebrowser") },
+                                    onNavigateToStats = { navController.navigate("stats") },
+                                    onNavigateToPlaylistDetail = { name ->
+                                        try {
+                                            val enc = Uri.encode(name)
+                                            navController.navigate("playlistDetail/$enc")
+                                        } catch (_: Exception) {
+                                            navController.navigate("playlist")
+                                        }
+                                    }
+                                )
+                            }
+
+                            composable("player") {
+                                PlayerScreen(audioId = -1L, restoreIfNoCurrent = false, onNavigateToPlaylistDetail = { name ->
                                     try {
                                         val enc = Uri.encode(name)
                                         navController.navigate("playlistDetail/$enc")
                                     } catch (_: Exception) {
                                         navController.navigate("playlist")
                                     }
-                                }
-                            )
-                        }
+                                })
+                            }
 
-                        composable("player") {
-                            PlayerScreen(audioId = -1L, restoreIfNoCurrent = false, onNavigateToPlaylistDetail = { name ->
-                                try {
-                                    val enc = Uri.encode(name)
-                                    navController.navigate("playlistDetail/$enc")
-                                } catch (_: Exception) {
-                                    navController.navigate("playlist")
-                                }
-                            })
-                        }
+                            composable("player/{audioId}") { backStackEntry ->
+                                val audioId =
+                                    backStackEntry.arguments?.getString("audioId")?.toLongOrNull()
+                                        ?: -1L
+                                PlayerScreen(audioId = audioId, onNavigateToPlaylistDetail = { name ->
+                                    try {
+                                        val enc = Uri.encode(name)
+                                        navController.navigate("playlistDetail/$enc")
+                                    } catch (_: Exception) {
+                                        navController.navigate("playlist")
+                                    }
+                                })
+                            }
 
-                        composable("player/{audioId}") { backStackEntry ->
-                            val audioId =
-                                backStackEntry.arguments?.getString("audioId")?.toLongOrNull()
-                                    ?: -1L
-                            PlayerScreen(audioId = audioId, onNavigateToPlaylistDetail = { name ->
-                                try {
-                                    val enc = Uri.encode(name)
-                                    navController.navigate("playlistDetail/$enc")
-                                } catch (_: Exception) {
-                                    navController.navigate("playlist")
-                                }
-                            })
-                        }
+                            composable("playlist") {
+                                com.example.bitsbeats.ui.screens.PlaylistScreen(
+                                    onNavigateToPlaylistDetail = { name: String ->
+                                        val enc = Uri.encode(name)
+                                        navController.navigate("playlistDetail/$enc")
+                                    },
+                                    onCreatePlaylist = {},
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable("playlist") {
-                            com.example.bitsbeats.ui.screens.PlaylistScreen(
-                                onNavigateToPlaylistDetail = { name: String ->
-                                    val enc = Uri.encode(name)
-                                    navController.navigate("playlistDetail/$enc")
-                                },
-                                onCreatePlaylist = {},
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            // Route without parameter: opens playlists list (used when no active playlist is set)
+                            composable("playlistDetail") {
+                                com.example.bitsbeats.ui.screens.PlaylistScreen(
+                                    onNavigateToPlaylistDetail = { name: String ->
+                                        val enc = Uri.encode(name)
+                                        navController.navigate("playlistDetail/$enc")
+                                    },
+                                    onCreatePlaylist = {},
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        // Route without parameter: opens playlists list (used when no active playlist is set)
-                        composable("playlistDetail") {
-                            com.example.bitsbeats.ui.screens.PlaylistScreen(
-                                onNavigateToPlaylistDetail = { name: String ->
-                                    val enc = Uri.encode(name)
-                                    navController.navigate("playlistDetail/$enc")
-                                },
-                                onCreatePlaylist = {},
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
-
-                        composable("playlistDetail/{id}") { backStackEntry ->
-                            val encoded = backStackEntry.arguments?.getString("id") ?: ""
-                            val id = try {
-                                Uri.decode(encoded)
+                            composable("playlistDetail/{id}") { backStackEntry ->
+                                val encoded = backStackEntry.arguments?.getString("id") ?: ""
+                                val id = try {
+                                    Uri.decode(encoded)
                             } catch (_: Exception) {
                                 encoded
                             }
@@ -356,11 +363,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onDestroy() {
+    fun onDestroy() {
         super.onDestroy()
         try {
             PlaybackController.release()
         } catch (_: Exception) {
+        }
+    }
+}
+
+
+// Helper composable: when device is in landscape, constrain UI width to the portrait width
+@Composable
+fun PortraitEnforcer(content: @Composable () -> Unit) {
+    val config = LocalConfiguration.current
+    val screenWidthDp = config.screenWidthDp
+    val screenHeightDp = config.screenHeightDp
+    val targetWidthDp = if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) screenHeightDp else screenWidthDp
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.width(targetWidthDp.dp).fillMaxHeight()) {
+            content()
         }
     }
 }
@@ -372,4 +394,4 @@ fun HomeScreenPreview() {
     BitsBeatsTheme {
         HomeScreen(onNavigateToPlayer = {}, onNavigateToPlaylist = {})
     }
-}
+}}
