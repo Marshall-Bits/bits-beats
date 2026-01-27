@@ -3,8 +3,7 @@ package com.example.bitsbeats
 import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
-import java.net.URLEncoder
-import java.net.URLDecoder
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -135,7 +134,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToStats = { navController.navigate("stats") },
                                 onNavigateToPlaylistDetail = { name ->
                                     try {
-                                        val enc = URLEncoder.encode(name, "UTF-8")
+                                        val enc = Uri.encode(name)
                                         navController.navigate("playlistDetail/$enc")
                                     } catch (_: Exception) {
                                         navController.navigate("playlist")
@@ -147,7 +146,7 @@ class MainActivity : ComponentActivity() {
                         composable("player") {
                             PlayerScreen(audioId = -1L, restoreIfNoCurrent = false, onNavigateToPlaylistDetail = { name ->
                                 try {
-                                    val enc = URLEncoder.encode(name, "UTF-8")
+                                    val enc = Uri.encode(name)
                                     navController.navigate("playlistDetail/$enc")
                                 } catch (_: Exception) {
                                     navController.navigate("playlist")
@@ -161,7 +160,7 @@ class MainActivity : ComponentActivity() {
                                     ?: -1L
                             PlayerScreen(audioId = audioId, onNavigateToPlaylistDetail = { name ->
                                 try {
-                                    val enc = URLEncoder.encode(name, "UTF-8")
+                                    val enc = Uri.encode(name)
                                     navController.navigate("playlistDetail/$enc")
                                 } catch (_: Exception) {
                                     navController.navigate("playlist")
@@ -172,7 +171,7 @@ class MainActivity : ComponentActivity() {
                         composable("playlist") {
                             com.example.bitsbeats.ui.screens.PlaylistScreen(
                                 onNavigateToPlaylistDetail = { name: String ->
-                                    val enc = URLEncoder.encode(name, "UTF-8")
+                                    val enc = Uri.encode(name)
                                     navController.navigate("playlistDetail/$enc")
                                 },
                                 onCreatePlaylist = {},
@@ -184,7 +183,7 @@ class MainActivity : ComponentActivity() {
                         composable("playlistDetail") {
                             com.example.bitsbeats.ui.screens.PlaylistScreen(
                                 onNavigateToPlaylistDetail = { name: String ->
-                                    val enc = URLEncoder.encode(name, "UTF-8")
+                                    val enc = Uri.encode(name)
                                     navController.navigate("playlistDetail/$enc")
                                 },
                                 onCreatePlaylist = {},
@@ -195,7 +194,7 @@ class MainActivity : ComponentActivity() {
                         composable("playlistDetail/{id}") { backStackEntry ->
                             val encoded = backStackEntry.arguments?.getString("id") ?: ""
                             val id = try {
-                                URLDecoder.decode(encoded, "UTF-8")
+                                Uri.decode(encoded)
                             } catch (_: Exception) {
                                 encoded
                             }
@@ -204,8 +203,12 @@ class MainActivity : ComponentActivity() {
                                 // navigate to the playlists list (route without parameter) when pressing back
                                 onNavigateBack = { navController.popBackStack() },
                                 onAddSongs = {
-                                    val enc = URLEncoder.encode(id, "UTF-8")
-                                    navController.navigate("filebrowser/$enc")
+                                    try {
+                                        val enc = Uri.encode(id)
+                                        navController.navigate("filebrowser/$enc")
+                                    } catch (_: Exception) {
+                                        navController.navigate("filebrowser")
+                                    }
                                 }
                             )
                         }
@@ -222,7 +225,7 @@ class MainActivity : ComponentActivity() {
                         composable("filebrowser/{addTo}") { backStackEntry ->
                             val encoded = backStackEntry.arguments?.getString("addTo") ?: ""
                             val playlistName = try {
-                                URLDecoder.decode(encoded, "UTF-8")
+                                Uri.decode(encoded)
                             } catch (_: Exception) {
                                 encoded
                             }

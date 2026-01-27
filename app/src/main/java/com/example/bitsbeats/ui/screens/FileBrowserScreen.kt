@@ -36,7 +36,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.SdCard
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
@@ -207,7 +206,7 @@ fun FileList(
                         )
                     } else {
                         Image(
-                            painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default),
+                            painter = painterResource(id = R.drawable.song_default),
                             contentDescription = "Default artwork",
                             modifier = Modifier.size(48.dp).clip(CircleShape).clickable { onFileSelected(audio.id) }
                         )
@@ -263,7 +262,7 @@ fun FileList(
                          if (embeddedBitmap != null) {
                              Image(bitmap = embeddedBitmap!!, contentDescription = "Artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
                          } else {
-                             Image(painter = painterResource(id = com.example.bitsbeats.R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
+                             Image(painter = painterResource(id = R.drawable.song_default), contentDescription = "Default artwork", modifier = Modifier.size(48.dp).clip(CircleShape).clickable { if (resolvedId != null) onFileSelected(resolvedId) })
                          }
                          Spacer(modifier = Modifier.width(8.dp))
                      } else {
@@ -285,18 +284,23 @@ fun FileList(
 
                     if (fileItem.isAudio && addToPlaylistName != null) {
                         AnimatedAddButton(tint = Color.White, onAdd = {
-                            if (resolvedId == null) return@AnimatedAddButton false
-                            try {
-                                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString()
-                                var title = File(fileItem.path).name
-                                var artist = ""
-                                var duration = 0L
+                            // avoid using `return@AnimatedAddButton` (explicit return inside lambda prohibited)
+                            if (resolvedId == null) {
+                                false
+                            } else {
                                 try {
-                                    context.contentResolver.query(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId), arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)?.use { c -> if (c.moveToFirst()) { title = c.getString(0) ?: title; artist = c.getString(1) ?: ""; duration = c.getLong(2) } }
-                                } catch (_: Exception) { /* ignore metadata errors */ }
+                                    val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString()
+                                    var title = File(fileItem.path).name
+                                    var artist = ""
+                                    var duration = 0L
+                                    try {
+                                        context.contentResolver.query(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId), arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)
+                                            ?.use { c -> if (c.moveToFirst()) { title = c.getString(0) ?: title; artist = c.getString(1) ?: ""; duration = c.getLong(2) } }
+                                    } catch (_: Exception) { /* ignore metadata errors */ }
 
-                                return@AnimatedAddButton PlaylistStore.addItemToPlaylist(context, addToPlaylistName, uri, title, artist, duration)
-                            } catch (_: Exception) { return@AnimatedAddButton false }
+                                    PlaylistStore.addItemToPlaylist(context, addToPlaylistName, uri, title, artist, duration)
+                                } catch (_: Exception) { false }
+                            }
                         })
                     } else if (fileItem.isAudio) {
                          val uriString = if (resolvedId != null) ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId).toString() else Uri.fromFile(File(fileItem.path)).toString()
@@ -356,6 +360,9 @@ fun FileBrowserScreen(
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
     var playlists by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // NEW: flag to indicate the user chose "New playlist" from the Add All flow
+    var createPlaylistAddAll by remember { mutableStateOf(false) }
 
     // cache mapping from file path -> MediaStore audio id (nullable)
     val pathToId = remember { mutableStateMapOf<String, Long?>() }
@@ -533,11 +540,41 @@ fun FileBrowserScreen(
             // add all audio files in the current directory to the selected playlist
             try {
                 files.filter { it.isAudio }.forEach { fileItem ->
-                    val uri = ContentUris.withAppendedId(
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        queryAudioIdFromPath(context.contentResolver, fileItem.path) ?: -1
-                    ).toString()
-                    PlaylistStore.addItemToPlaylist(context, playlistName, uri)
+                    // Resolve media id from cache or fallback to query
+                    val resolvedId = pathToId[fileItem.path] ?: try { queryAudioIdFromPath(context.contentResolver, fileItem.path) } catch (_: Exception) { null }
+
+                    var uriStr: String
+                    var title = File(fileItem.path).name
+                    var artist = ""
+                    var duration = 0L
+
+                    if (resolvedId != null && resolvedId >= 0L) {
+                        val cid = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId)
+                        uriStr = cid.toString()
+                        try {
+                            context.contentResolver.query(cid, arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)
+                                ?.use { c ->
+                                    if (c.moveToFirst()) {
+                                        title = c.getString(0) ?: title
+                                        artist = c.getString(1) ?: ""
+                                        duration = c.getLong(2)
+                                    }
+                                }
+                        } catch (_: Exception) { /* ignore metadata errors */ }
+                    } else {
+                        uriStr = Uri.fromFile(File(fileItem.path)).toString()
+                        try {
+                            val mmr = android.media.MediaMetadataRetriever()
+                            mmr.setDataSource(fileItem.path)
+                            title = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE) ?: title
+                            artist = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
+                            duration = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                            mmr.release()
+                        } catch (_: Exception) { /* ignore */ }
+                    }
+
+                    // add with metadata so PlaylistDetail shows title/artist/duration
+                    PlaylistStore.addItemToPlaylist(context, playlistName, uriStr, title, artist, duration)
                 }
                 Toast.makeText(context, "Added all to '$playlistName'", Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {
@@ -567,6 +604,8 @@ fun FileBrowserScreen(
                     // "New playlist" option
                     Button(
                         onClick = {
+                            // indicate new playlist should receive the files
+                            createPlaylistAddAll = true
                             showCreatePlaylistDialog = true
                             onDismiss()
                         },
@@ -592,28 +631,75 @@ fun FileBrowserScreen(
         val onConfirm = { playlistName: String ->
             // create the new playlist and add the selected item(s)
             try {
-                val uri = selectedAudioUri?.let {
-                    ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.toLong())
-                }
-                val audioTitle = selectedAudioTitle
-                val audioArtist = selectedAudioArtist
-                val audioDuration = selectedAudioDuration
-                val added = if (isSingleItem && uri != null) {
-                    // single item: add to new playlist immediately
-                    PlaylistStore.addItemToPlaylist(context, playlistName, uri.toString(), audioTitle, audioArtist, audioDuration)
-                } else {
-                    // "Add all" case: just create the empty playlist
-                    PlaylistStore.createPlaylist(context, playlistName)
-                }
-                if (added) {
-                    Toast.makeText(context, "Playlist '$playlistName' created", Toast.LENGTH_SHORT).show()
-                    showCreatePlaylistDialog = false
-                    showCreatePlaylistForSingleDialog = false
-                } else {
+                // create the playlist first
+                val created = PlaylistStore.createPlaylist(context, playlistName)
+                if (!created) {
                     Toast.makeText(context, "Error creating playlist", Toast.LENGTH_SHORT).show()
+                } else {
+                    if (isSingleItem) {
+                        // single item: add to new playlist immediately using selected metadata
+                        val uri = selectedAudioUri
+                        val audioTitle = selectedAudioTitle
+                        val audioArtist = selectedAudioArtist
+                        val audioDuration = selectedAudioDuration
+                        val added = if (!uri.isNullOrBlank()) {
+                            PlaylistStore.addItemToPlaylist(context, playlistName, uri, audioTitle, audioArtist, audioDuration)
+                        } else false
+
+                        if (added) {
+                            Toast.makeText(context, "Playlist '$playlistName' created and item added", Toast.LENGTH_SHORT).show()
+                            showCreatePlaylistForSingleDialog = false
+                        } else {
+                            Toast.makeText(context, "Playlist created but could not add item", Toast.LENGTH_SHORT).show()
+                        }
+                    } else if (createPlaylistAddAll) {
+                        // "Add all" case: add all audio files with metadata
+                        try {
+                            files.filter { it.isAudio }.forEach { fileItem ->
+                                val resolvedId = pathToId[fileItem.path] ?: try { queryAudioIdFromPath(context.contentResolver, fileItem.path) } catch (_: Exception) { null }
+                                var uriStr: String
+                                var title = File(fileItem.path).name
+                                var artist = ""
+                                var duration = 0L
+
+                                if (resolvedId != null && resolvedId >= 0L) {
+                                    val cid = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, resolvedId)
+                                    uriStr = cid.toString()
+                                    try {
+                                        context.contentResolver.query(cid, arrayOf(MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION), null, null, null)
+                                            ?.use { c -> if (c.moveToFirst()) { title = c.getString(0) ?: title; artist = c.getString(1) ?: ""; duration = c.getLong(2) } }
+                                    } catch (_: Exception) { /* ignore */ }
+                                } else {
+                                    uriStr = Uri.fromFile(File(fileItem.path)).toString()
+                                    try {
+                                        val mmr = android.media.MediaMetadataRetriever()
+                                        mmr.setDataSource(fileItem.path)
+                                        title = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE) ?: title
+                                        artist = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
+                                        duration = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                                        mmr.release()
+                                    } catch (_: Exception) { /* ignore */ }
+                                }
+
+                                PlaylistStore.addItemToPlaylist(context, playlistName, uriStr, title, artist, duration)
+                            }
+                            Toast.makeText(context, "Playlist '$playlistName' created and files added", Toast.LENGTH_SHORT).show()
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Playlist created but error adding files", Toast.LENGTH_SHORT).show()
+                        } finally {
+                            createPlaylistAddAll = false
+                            showCreatePlaylistDialog = false
+                        }
+                    } else {
+                        // simple create (no auto-add)
+                        Toast.makeText(context, "Playlist '$playlistName' created", Toast.LENGTH_SHORT).show()
+                        showCreatePlaylistDialog = false
+                    }
                 }
             } catch (_: Exception) {
                 Toast.makeText(context, "Error", Toast.LENGTH_SHORT).show()
+            } finally {
+                newPlaylistName = ""
             }
         }
         AlertDialog(
