@@ -2,7 +2,7 @@
 
 <img alt="Portada youtube" height="600" src="./readme-assets/portada.png" width="800"/>
 
-Puedes ver el vídeo del proceso de desarrollo en [YouTube](https://www.youtube.com/watch?v=).
+Puedes ver el vídeo del proceso de desarrollo en [YouTube](https://youtu.be/qT5bZPwZn8A).
 
 ## Descripción
 
